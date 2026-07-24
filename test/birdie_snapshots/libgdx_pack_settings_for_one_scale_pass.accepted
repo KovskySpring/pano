@@ -1,0 +1,7 @@
+---
+version: 2.0.2
+title: libgdx pack settings for one scale pass
+file: ./test/texture_packer_test.gleam
+test_name: settings_json_snapshot_test
+---
+{"pot":false,"paddingX":2,"paddingY":2,"edgePadding":true,"duplicatePadding":true,"rotation":false,"stripWhitespaceX":true,"stripWhitespaceY":true,"alphaThreshold":0,"filterMin":"Linear","filterMag":"Linear","format":"RGBA8888","maxWidth":2048,"maxHeight":2048,"combineSubdirectories":true,"flattenPaths":false,"useIndexes":false,"bleed":true,"scaleResampling":["bicubic"],"scale":[0.69444]}

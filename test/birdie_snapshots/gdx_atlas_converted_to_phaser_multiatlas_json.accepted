@@ -1,0 +1,5 @@
+---
+version: 2.0.2
+title: gdx atlas converted to phaser multiatlas json
+---
+{"textures":[{"image":"default-resources-0.png","format":"RGBA8888","size":{"w":2048,"h":1024},"scale":0.3472,"frames":[{"filename":"icons/star","rotated":false,"trimmed":true,"sourceSize":{"w":100,"h":100},"spriteSourceSize":{"x":2,"y":4,"w":96,"h":92},"frame":{"x":2,"y":2,"w":96,"h":92}},{"filename":"blank","rotated":false,"trimmed":false,"sourceSize":{"w":100,"h":100},"spriteSourceSize":{"x":0,"y":0,"w":100,"h":100},"frame":{"x":100,"y":2,"w":100,"h":100}}]},{"image":"default-resources-1.png","format":"RGBA8888","size":{"w":512,"h":512},"scale":0.3472,"frames":[{"filename":"button/play","rotated":true,"trimmed":false,"sourceSize":{"w":200,"h":80},"spriteSourceSize":{"x":0,"y":0,"w":200,"h":80},"frame":{"x":4,"y":4,"w":200,"h":80}}]}],"meta":{"app":"https://github.com/libgdx/libgdx (runnable-texturepacker)","version":"3.0"}}
