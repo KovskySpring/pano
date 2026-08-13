@@ -1,4 +1,4 @@
-//// Loader for `packs.toml` — the single input file that configures a pack
+//// Loader for `packs.toml` - the single input file that configures a pack
 //// run: tool paths, concurrency, scale variants, and the atlas registry
 //// (previously hardcoded in `spec.gleam`).
 ////
@@ -13,15 +13,11 @@
 //// name = "default-resources"         # required
 //// source_dir = "images/default"      # required, the source image directory
 //// target_dir = "textures"            # required, output root for this atlas
-//// scales = [                         # required, at least one entry:
-////   { dir = "1x", factor = 0.3472 }, # dir = output subdirectory under
-//// ]                                  # target_dir, factor = downscale
-////                                    # factor (1.0 = full res)
-//// indexed = true                     # optional, default true
-//// pot = false                        # optional libGDX TexturePacker
-//// rotation = false                   # settings overrides — see
-//// max_width = 2048                   # cli/settings for the
-//// ...                                # full list and their defaults
+//// [variants.1x]                       # optional; absent = single pack
+////   factor = 0.3472                   # at 1.0 directly into target_dir
+////                                     #
+//// [variants.1x.compression.8bit]      # optional per variant; absent =
+////   depth = 8                         # skip re-encoding; key = subdir
 //// ```
 ////
 //// Environment overrides (applied by `load`, kept for CI parity with the old
@@ -29,7 +25,9 @@
 //// `GDX_CONCURRENCY` replaces `concurrency`.
 
 import cli/settings.{type Settings, Settings}
-import cli/spec.{type Scale, type Spec, Scale, Spec}
+import cli/spec.{
+  type Compression, type Spec, type Variant, Compression, Spec, Variant,
+}
 import envoy
 import filepath
 import gleam/dict.{type Dict}
@@ -38,6 +36,8 @@ import gleam/int
 import gleam/list
 import gleam/result
 import gleam/string
+import optimizer/spec.{Png} as _
+import optimizer/vips/png/toml as png_toml
 import simplifile
 import snag
 import tom.{type Toml}
@@ -104,24 +104,28 @@ fn resolve(path: String, base_dir: String) -> String {
   }
 }
 
-fn get_scales(table: Dict(String, Toml)) -> snag.Result(List(Scale)) {
-  use items <- result.try(required(tom.get_array(table, ["scales"])))
-  use scales <- result.try(list.try_map(items, get_scale))
-  case scales {
-    [] -> snag.error("`scales` must have at least one entry")
-    _ -> Ok(scales)
+fn get_variants(table: Dict(String, Toml)) -> snag.Result(List(Variant)) {
+  case tom.get_table(table, ["variants"]) {
+    Error(tom.NotFound(_)) -> Ok([])
+    Error(error) -> Error(get_error_to_snag(error))
+    Ok(variants_table) ->
+      variants_table
+      |> dict.to_list
+      |> list.sort(fn(a, b) { string.compare(a.0, b.0) })
+      |> list.try_map(get_variant_entry)
   }
 }
 
-fn get_scale(item: Toml) -> snag.Result(Scale) {
-  {
-    use table <- result.try(required(tom.as_table(item)))
-    use dir <- result.try(required(tom.get_string(table, ["dir"])))
-    use factor <- result.try(required(tom.get_number(table, ["factor"])))
+fn get_variant_entry(entry: #(String, Toml)) -> snag.Result(Variant) {
+  let #(name, toml) = entry
+  let variant = {
+    use vt <- result.try(required(tom.as_table(toml)))
+    use factor <- result.try(required(tom.get_number(vt, ["factor"])))
     use f_factor <- result.try(to_float(factor))
-    Ok(Scale(dir:, factor: f_factor))
+    use compression <- result.try(get_compression(vt))
+    Ok(Variant(name:, factor: f_factor, compression:))
   }
-  |> snag.context("in a `scales` entry")
+  snag.context(variant, "in variant `" <> name <> "`")
 }
 
 fn get_atlases(
@@ -145,17 +149,41 @@ fn get_atlas(item: Toml, base_dir: String) -> snag.Result(Spec) {
   use name <- result.try(required(tom.get_string(table, ["name"])))
   use source_dir <- result.try(get_path(table, "source_dir", base_dir))
   use target_dir <- result.try(get_path(table, "target_dir", base_dir))
-  use scales <- result.try(get_scales(table))
+  use variants <- result.try(get_variants(table))
   use indexed <- result.try(optional(tom.get_bool(table, ["indexed"]), True))
   use gdx_settings <- result.try(get_gdx_settings(table))
 
   let spec =
-    Ok(Spec(name:, source_dir:, target_dir:, scales:, indexed:, gdx_settings:))
+    Ok(Spec(name:, source_dir:, target_dir:, variants:, indexed:, gdx_settings:))
 
   snag.context(spec, "in atlas `" <> name <> "`")
 }
 
-/// Optional per-atlas libGDX TexturePacker overrides — see
+fn get_compression(
+  table: Dict(String, Toml),
+) -> snag.Result(List(Compression)) {
+  case tom.get_table(table, ["compression"]) {
+    Error(tom.NotFound(_)) -> Ok([])
+    Error(error) -> Error(get_error_to_snag(error))
+    Ok(compression_table) ->
+      compression_table
+      |> dict.to_list
+      |> list.sort(fn(a, b) { string.compare(a.0, b.0) })
+      |> list.try_map(get_compression_entry)
+  }
+}
+
+fn get_compression_entry(entry: #(String, Toml)) -> snag.Result(Compression) {
+  let #(name, toml) = entry
+  let compression = {
+    use ct <- result.try(required(tom.as_table(toml)))
+    use png_opts <- result.try(png_toml.from_toml(ct))
+    Ok(Compression(name:, format: Png(options: png_opts)))
+  }
+  snag.context(compression, "in compression `" <> name <> "`")
+}
+
+/// Optional per-atlas libGDX TexturePacker overrides - see
 /// `cli/settings` for what each field does and its default.
 fn get_gdx_settings(table: Dict(String, Toml)) -> snag.Result(Settings) {
   let default = settings.default()

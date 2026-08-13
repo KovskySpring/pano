@@ -3,9 +3,12 @@ import cli/config
 import cli/gdx_atlas
 import cli/phaser
 import cli/settings.{Settings}
-import cli/spec.{Scale, Spec}
+import cli/spec.{Compression, Spec, Variant}
 import gleam/list
+import gleam/option.{Some}
 import gleeunit
+import optimizer/spec as optimizer_spec
+import optimizer/vips/png/options as png_options
 
 pub fn main() -> Nil {
   gleeunit.main()
@@ -114,36 +117,22 @@ const default_gdx_settings = Settings(
   scale_resampling: "bicubic",
 )
 
-const cities_spec = Spec(
-  name: "cities-resources-germany",
-  source_dir: "images/cities/germany",
-  target_dir: "textures",
-  scales: [Scale("1x", 0.3472)],
-  indexed: False,
-  gdx_settings: default_gdx_settings,
-)
-
-const default_spec = Spec(
-  name: "default-resources",
-  source_dir: "images/default",
-  target_dir: "textures",
-  scales: [Scale("1x", 0.3472)],
-  indexed: True,
-  gdx_settings: default_gdx_settings,
-)
-
 pub fn page_image_name_test() {
   // Indexed atlases always carry the page index, even single-page.
-  assert spec.page_image_name(default_spec, 0) == "default-resources-0.png"
-  assert spec.page_image_name(default_spec, 1) == "default-resources-1.png"
+  assert spec.page_image_name("default-resources", True, 0)
+    == "default-resources-0.png"
+  assert spec.page_image_name("default-resources-32", True, 1)
+    == "default-resources-32-1.png"
 
   // Un-indexed atlases carry no page index.
-  assert spec.page_image_name(cities_spec, 0) == "cities-resources-germany.png"
+  assert spec.page_image_name("cities-resources-germany", False, 0)
+    == "cities-resources-germany.png"
 }
 
 pub fn json_name_test() {
-  assert spec.json_name(default_spec) == "default-resources.json"
-  assert spec.json_name(cities_spec) == "cities-resources-germany.json"
+  assert spec.json_name("default-resources") == "default-resources.json"
+  assert spec.json_name("cities-resources-germany-32")
+    == "cities-resources-germany-32.json"
 }
 
 const sample_config = "
@@ -153,14 +142,21 @@ jar = \"vendor/packer.jar\"
 name = \"default-resources\"
 source_dir = \"art/default\"
 target_dir = \"/absolute/textures\"
-scales = [{ dir = \"1x\", factor = 0.5 }, { dir = \"2x\", factor = 1 }]
+
+[atlases.variants.1x]
+factor = 0.5
+
+[atlases.variants.2x]
+factor = 1
 
 [[atlases]]
 name = \"cities-resources-brazil\"
 source_dir = \"art/cities/brazil\"
 target_dir = \"textures\"
-scales = [{ dir = \"1x\", factor = 0.5 }]
 indexed = false
+
+[atlases.variants.1x]
+factor = 0.5
 "
 
 pub fn config_parse_test() {
@@ -179,7 +175,7 @@ pub fn config_parse_test() {
       name: "default-resources",
       source_dir: "repo/art/default",
       target_dir: "/absolute/textures",
-      scales: [Scale("1x", 0.5), Scale("2x", 1.0)],
+      variants: [Variant("1x", 0.5, []), Variant("2x", 1.0, [])],
       indexed: True,
       gdx_settings: default_gdx_settings,
     )
@@ -187,8 +183,84 @@ pub fn config_parse_test() {
   assert brazil.name == "cities-resources-brazil"
   assert brazil.source_dir == "repo/art/cities/brazil"
   assert brazil.target_dir == "repo/textures"
-  assert brazil.scales == [Scale("1x", 0.5)]
+  assert brazil.variants == [Variant("1x", 0.5, [])]
   assert !brazil.indexed
+}
+
+const compression_config = "
+jar = \"c\"
+
+[[atlases]]
+name = \"x\"
+source_dir = \"x\"
+target_dir = \"o\"
+
+[atlases.variants.1x]
+factor = 1.0
+
+[atlases.variants.1x.compression.x]
+depth = 8
+quality = 90
+dither = 0.4
+
+[atlases.variants.1x.compression.x-32]
+compression = 6
+strip = false
+"
+
+pub fn config_parses_compression_test() {
+  let assert Ok(parsed) = config.parse(compression_config, base_dir: "")
+  let assert [atlas] = parsed.atlases
+
+  let assert [variant] = atlas.variants
+  assert variant.compression
+    == [
+      Compression(
+        name: "x",
+        format: optimizer_spec.Png(
+          options: png_options.PngOptions(
+            ..png_options.none(),
+            bitdepth: Some(8),
+            palette: Some(True),
+            q: Some(90),
+            dither: Some(0.4),
+            compression: Some(9),
+            keep: Some(png_options.KeepNone),
+          ),
+        ),
+      ),
+      Compression(
+        name: "x-32",
+        format: optimizer_spec.Png(
+          options: png_options.PngOptions(
+            ..png_options.none(),
+            filter: Some(png_options.FilterAll),
+            q: Some(100),
+            dither: Some(1.0),
+            compression: Some(6),
+          ),
+        ),
+      ),
+    ]
+}
+
+pub fn config_rejects_wrong_type_compression_depth_test() {
+  let bad =
+    "
+jar = \"c\"
+
+[[atlases]]
+name = \"x\"
+source_dir = \"x\"
+target_dir = \"o\"
+
+[atlases.variants.1x]
+factor = 1.0
+
+[atlases.variants.1x.compression.x]
+depth = \"eight\"
+"
+  let assert Error(_) = config.parse(bad, base_dir: "")
 }
 
 pub fn shipped_config_test() {
@@ -207,6 +279,6 @@ pub fn shipped_config_test() {
     })
   assert germany.source_dir
     == "test/../../assets/original/images/cities/germany"
-  assert list.length(germany.scales) == 3
+  assert list.length(germany.variants) == 3
   assert !germany.indexed
 }

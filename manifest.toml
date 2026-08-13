@@ -7,9 +7,12 @@
 # You should check this file into your source control repository.
 
 packages = [
+  { name = "ansel", version = "2.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "snag", "vix"], otp_app = "ansel", source = "hex", outer_checksum = "208637BE1664F32FA5B7611331BCBC28DC14D63CE3F656B513F5362A867A1971" },
   { name = "argv", version = "1.1.0", build_tools = ["gleam"], requirements = [], otp_app = "argv", source = "hex", outer_checksum = "3277D100448BDB4A29B6D58C0F36F631CBC349E8BDD09766C6309DF202831140" },
   { name = "birdie", version = "2.0.2", build_tools = ["gleam"], requirements = ["argv", "edit_distance", "envoy", "filepath", "glance", "gleam_community_ansi", "gleam_json", "gleam_stdlib", "global_value", "justin", "rank", "simplifile", "term_size", "tom", "trie_again"], otp_app = "birdie", source = "hex", outer_checksum = "7DE79894F1D92C36B299564C5FBE37F10EBF16C600256E11F60011FDAB97D72B" },
+  { name = "cc_precompiler", version = "0.1.11", build_tools = ["mix"], requirements = ["elixir_make"], otp_app = "cc_precompiler", source = "hex", outer_checksum = "3427232CAF0835F94680E5BCF082408A70B48AD68A5F5C0B02A3BEA9F3A075B9" },
   { name = "edit_distance", version = "3.0.1", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "edit_distance", source = "hex", outer_checksum = "DE588BC3483ED6DBA717211B59F3178891A5FC6F1C00D415AE8C4233EAFB94B1" },
+  { name = "elixir_make", version = "0.10.0", build_tools = ["mix"], requirements = [], otp_app = "elixir_make", source = "hex", outer_checksum = "DC1F09FB7FA68866B886ABD5F0F3C83553B1A19A52359A899E92AF1BB3B31982" },
   { name = "envoy", version = "1.2.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "envoy", source = "hex", outer_checksum = "9C6FBB6BFA02A52798BEEC5977A738CAD6E4A057F4B67FD0C8061AD2502C191A" },
   { name = "exception", version = "2.1.1", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "exception", source = "hex", outer_checksum = "6BDEA95248093599391C3B5DF1835C5C6A86C353C2F99CE539B450E3432FE117" },
   { name = "filepath", version = "1.1.2", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "filepath", source = "hex", outer_checksum = "B06A9AF0BF10E51401D64B98E4B627F1D2E48C154967DA7AF4D0914780A6D40A" },
@@ -37,9 +40,11 @@ packages = [
   { name = "term_size", version = "1.0.1", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "term_size", source = "hex", outer_checksum = "D00BD2BC8FB3EBB7E6AE076F3F1FF2AC9D5ED1805F004D0896C784D06C6645F1" },
   { name = "tom", version = "2.1.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "gleam_time"], otp_app = "tom", source = "hex", outer_checksum = "DCF04CB7AB35D58CFC598C66EA2E1816D160759802C89B2BA6238780D59BC256" },
   { name = "trie_again", version = "1.1.4", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "trie_again", source = "hex", outer_checksum = "E3BD66B4E126EF567EA8C4944EAB216413392ADF6C16C36047AF79EE5EF13466" },
+  { name = "vix", version = "0.40.0", build_tools = ["mix", "make"], requirements = ["cc_precompiler", "elixir_make", "kino"], otp_app = "vix", source = "hex", outer_checksum = "342D69D41928E59588604F9035B383BF61E3B768BB3B1ED73A05ECA134058D15" },
 ]
 
 [requirements]
+ansel = { version = ">= 2.0.0 and < 3.0.0" }
 argv = { version = ">= 1.1.0 and < 2.0.0" }
 birdie = { version = ">= 2.0.2 and < 3.0.0" }
 envoy = { version = ">= 1.2.0 and < 2.0.0" }

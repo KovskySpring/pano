@@ -1,46 +1,65 @@
-//// Atlas and scale descriptions plus the output naming rules. The registry
-//// itself lives in `packs.toml` (decoded by `cli/config`), not in
-//// source code.
+//// Atlas and variant descriptions plus the output naming rules. The registry
+//// itself lives in `packs.toml` (decoded by `cli/config`), not in source code.
+////
+//// Output directory layout:
+////   no variants   → `<target_dir>/`
+////   has variants  → `<target_dir>/<variant.name>/`
+////   + compression → `<target_dir>/<variant.name>/<compression.name>/`
 
 import cli/settings.{type Settings}
 import gleam/int
+import optimizer/spec.{type Format}
 
 pub type Spec {
   Spec(
     name: String,
     /// Path to the atlas's source image directory.
     source_dir: String,
-    /// Output root; pages and JSON land in `<target_dir>/<scale dir>/`.
+    /// Output root for this atlas.
     target_dir: String,
-    /// Output scales: the atlas is packed once per scale.
-    scales: List(Scale),
-    /// Whether page filenames carry a `-<index>` suffix. True for old
-    /// MultiPackAuto atlases (always suffixed, even single-page), false for
-    /// MultiPackOff atlases (e.g. gameplay-pwf, cities, tournament themes).
+    /// Output variants: the atlas is packed once per variant at that
+    /// variant's scale factor. Empty means pack once at factor 1.0,
+    /// writing directly into `target_dir`.
+    variants: List(Variant),
+    /// Whether page filenames carry a `-<index>` suffix.
     indexed: Bool,
-    /// libGDX TexturePacker settings for this atlas, defaulting to
-    /// `cli/settings.default()` (the old fixed template).
+    /// libGDX TexturePacker settings for this atlas.
     gdx_settings: Settings,
   )
 }
 
-/// One output scale: art is packed once per scale into `<target_dir>/<dir>/`.
-pub type Scale {
-  Scale(dir: String, factor: Float)
+/// One output variant: a named scale pass with optional compression outputs.
+///
+/// - `name` becomes a subdirectory of `target_dir` (e.g. `"1x"`).
+/// - `factor` is the downscale factor forwarded to libGDX TexturePacker.
+/// - `compression` lists re-encoding outputs. Empty skips re-encoding.
+pub type Variant {
+  Variant(name: String, factor: Float, compression: List(Compression))
 }
 
-/// libGDX page index -> the runtime's expected page filename. Layout:
-/// `<name><-index if indexed>.png`, e.g. `cities-resources-germany.png`,
-/// `default-resources-0.png`.
-pub fn page_image_name(spec: Spec, index: Int) -> String {
-  let page_index = case spec.indexed {
+/// One compression output within a variant.
+///
+/// - `name` becomes a subdirectory under the variant's output directory.
+/// - `format` carries the encoder options for that output.
+pub type Compression {
+  Compression(name: String, format: Format)
+}
+
+/// Page output filename for the given atlas name, page index, and indexed flag.
+/// e.g. `page_image_name("atlas", True, 0)` → `"atlas-0.png"`.
+pub fn page_image_name(
+  atlas_name: String,
+  indexed: Bool,
+  index: Int,
+) -> String {
+  let page_index = case indexed {
     True -> "-" <> int.to_string(index)
     False -> ""
   }
-  spec.name <> page_index <> ".png"
+  atlas_name <> page_index <> ".png"
 }
 
-/// Atlas JSON filename, mirroring `page_image_name` without the page index.
-pub fn json_name(spec: Spec) -> String {
-  spec.name <> ".json"
+/// JSON output filename for the atlas (e.g. `"atlas.json"`).
+pub fn json_name(atlas_name: String) -> String {
+  atlas_name <> ".json"
 }

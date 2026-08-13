@@ -1,4 +1,4 @@
-//// CLI for the GDX texture build — a drop-in replacement for the packing
+//// CLI for the GDX texture build - a drop-in replacement for the packing
 //// half of the old `management/textures/build.ts` + `gdxPack.ts`.
 ////
 //// All configuration (paths, concurrency, scales, and the atlas registry)
@@ -28,7 +28,7 @@ fn pack_command() -> glint.Command(Nil) {
   use <- glint.command_help(
     "Packs source art into Phaser multiatlas textures using the headless"
     <> " libGDX runnable-texturepacker.jar. All configuration comes from a"
-    <> " packs.toml file — every atlas in it is packed.",
+    <> " packs.toml file - every atlas in it is packed.",
   )
   use config_flag <- glint.flag(
     glint.string_flag("config")
