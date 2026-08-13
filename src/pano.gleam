@@ -26,8 +26,7 @@ pub fn main() {
 
 fn pack_command() -> glint.Command(Nil) {
   use <- glint.command_help(
-    "Multi-threaded texture packer for Phaser 3,
-    using libGDX's TexturePacker under the hood.",
+    "Multi-threaded texture packer for Phaser 3, using libGDX's TexturePacker under the hood.",
   )
   use config_flag <- glint.flag(
     glint.string_flag("config")
