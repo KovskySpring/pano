@@ -18,7 +18,7 @@ import snag
 
 pub fn main() {
   glint.new()
-  |> glint.with_name("texture_packer")
+  |> glint.with_name("pano")
   |> glint.pretty_help(glint.default_pretty_help())
   |> glint.add(at: [], do: pack_command())
   |> glint.run(argv.load().arguments)
@@ -26,9 +26,8 @@ pub fn main() {
 
 fn pack_command() -> glint.Command(Nil) {
   use <- glint.command_help(
-    "Packs source art into Phaser multiatlas textures using the headless"
-    <> " libGDX runnable-texturepacker.jar. All configuration comes from a"
-    <> " packs.toml file - every atlas in it is packed.",
+    "Multi-threaded texture packer for Phaser 3,
+    using libGDX's TexturePacker under the hood.",
   )
   use config_flag <- glint.flag(
     glint.string_flag("config")

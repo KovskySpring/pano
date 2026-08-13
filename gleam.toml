@@ -1,4 +1,4 @@
-name = "texture_packer"
+name = "pano"
 version = "1.0.0"
 description = "Multi-scale headless GDX texture packing into Phaser multiatlas format"
 licences = ["Apache-2.0"]

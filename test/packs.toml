@@ -1,4 +1,4 @@
-# Texture packing config, consumed by `gleam run` in dev/texture_packer.
+# Texture packing config, consumed by `gleam run` in dev/pano.
 # Relative paths resolve against this file's directory.
 
 jar = "../../management/textures/vendor/runnable-texturepacker.jar"
