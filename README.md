@@ -1,4 +1,4 @@
-# pano - Phaser pAck N' Optimize
+# pano - Phaser Pack N' Optimize
 
 Multi-threaded texture packer for Phaser 3,
 using libGDX's TexturePacker under the hood.
