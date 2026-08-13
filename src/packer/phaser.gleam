@@ -1,10 +1,10 @@
 //// Encoder for the Phaser 3 multipack JSON format consumed by
 //// `load.multiatlas` (the `textures[]` / `frames[]`
 
-import cli/gdx_atlas.{type Frame, type Page}
 import gleam/float
 import gleam/int
 import gleam/json.{type Json}
+import packer/gdx_atlas.{type Frame, type Page}
 
 pub const meta_app = "https://github.com/libgdx/libgdx (runnable-texturepacker)"
 

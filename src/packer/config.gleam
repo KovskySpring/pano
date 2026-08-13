@@ -24,10 +24,6 @@
 //// pipeline): `GDX_OUT_ROOT` replaces every atlas's `target_dir`,
 //// `GDX_CONCURRENCY` replaces `concurrency`.
 
-import cli/settings.{type Settings, Settings}
-import cli/spec.{
-  type Compression, type Spec, type Variant, Compression, Spec, Variant,
-}
 import envoy
 import filepath
 import gleam/dict.{type Dict}
@@ -38,6 +34,10 @@ import gleam/result
 import gleam/string
 import optimizer/spec.{Png} as _
 import optimizer/vips/png/toml as png_toml
+import packer/settings.{type Settings, Settings}
+import packer/spec.{
+  type Compression, type Spec, type Variant, Compression, Spec, Variant,
+}
 import simplifile
 import snag
 import tom.{type Toml}
@@ -184,7 +184,7 @@ fn get_compression_entry(entry: #(String, Toml)) -> snag.Result(Compression) {
 }
 
 /// Optional per-atlas libGDX TexturePacker overrides - see
-/// `cli/settings` for what each field does and its default.
+/// `packer/settings` for what each field does and its default.
 fn get_gdx_settings(table: Dict(String, Toml)) -> snag.Result(Settings) {
   let default = settings.default()
   use pot <- result.try(optional(tom.get_bool(table, ["pot"]), default.pot))

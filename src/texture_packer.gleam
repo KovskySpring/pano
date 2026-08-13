@@ -9,10 +9,10 @@
 ////   gleam run -- --config=path/packs.toml  # explicit config location
 
 import argv
-import cli/config
-import cli/pack
 import gleam/io
 import glint
+import packer/config
+import packer/pack
 import shellout
 import snag
 

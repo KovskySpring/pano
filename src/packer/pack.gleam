@@ -6,19 +6,13 @@
 //// multipack JSON the runtime already loads, then re-encodes each page with
 //// ansel/libvips into every compression output defined for that variant.
 ////
-//// Output directory layout mirrors `cli/spec`:
+//// Output directory layout mirrors `packer/spec`:
 ////   no variants   → `<target_dir>/`
 ////   has variants  → `<target_dir>/<variant.name>/`
 ////   + compression → `<target_dir>/<variant.name>/<compression.name>/`
 
 import ansel.{type Image}
 import ansel/image
-import cli/config.{type Config}
-import cli/gdx_atlas.{type Page}
-import cli/phaser
-import cli/pool
-import cli/settings
-import cli/spec.{type Compression, type Spec}
 import filepath
 import gleam/int
 import gleam/io
@@ -26,6 +20,12 @@ import gleam/list
 import gleam/result
 import gleam/string
 import optimizer/encode
+import packer/config.{type Config}
+import packer/gdx_atlas.{type Page}
+import packer/phaser
+import packer/pool
+import packer/settings
+import packer/spec.{type Compression, type Spec}
 import shellout
 import simplifile
 import snag

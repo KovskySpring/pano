@@ -42,7 +42,7 @@ indexed = true                        # optional, default true: page filenames
                                       # carry a -<index> suffix
 
 # Optional libGDX TexturePacker overrides, all defaulting to the values
-# below. See `src/cli/settings.gleam` for what each one does.
+# below. See `src/packer/settings.gleam` for what each one does.
 pot = false
 padding_x = 2
 padding_y = 2

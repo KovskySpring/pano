@@ -1,14 +1,14 @@
 //// Atlas and variant descriptions plus the output naming rules. The registry
-//// itself lives in `packs.toml` (decoded by `cli/config`), not in source code.
+//// itself lives in `packs.toml` (decoded by `packer/config`), not in source code.
 ////
 //// Output directory layout:
 ////   no variants   → `<target_dir>/`
 ////   has variants  → `<target_dir>/<variant.name>/`
 ////   + compression → `<target_dir>/<variant.name>/<compression.name>/`
 
-import cli/settings.{type Settings}
 import gleam/int
 import optimizer/spec.{type Format}
+import packer/settings.{type Settings}
 
 pub type Spec {
   Spec(

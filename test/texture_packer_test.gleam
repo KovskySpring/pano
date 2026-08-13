@@ -1,14 +1,14 @@
 import birdie
-import cli/config
-import cli/gdx_atlas
-import cli/phaser
-import cli/settings.{Settings}
-import cli/spec.{Compression, Spec, Variant}
 import gleam/list
 import gleam/option.{Some}
 import gleeunit
 import optimizer/spec as optimizer_spec
 import optimizer/vips/png/options as png_options
+import packer/config
+import packer/gdx_atlas
+import packer/phaser
+import packer/settings.{Settings}
+import packer/spec.{Compression, Spec, Variant}
 
 pub fn main() -> Nil {
   gleeunit.main()
