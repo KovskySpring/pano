@@ -3,3 +3,6 @@ gleam = "1.18.1"
 erlang = "29.0.5"
 rebar = { version = "3.27.0", asset_pattern = "rebar3" }
 elixir = { version = "1.20.3-otp-29", postinstall = "mix local.hex --force" }
+
+[tasks.build]
+run = ["gleam export escript", "mkdir -p dist", "mv -f pano dist/pano"]
