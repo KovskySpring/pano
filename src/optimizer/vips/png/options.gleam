@@ -86,7 +86,7 @@ pub fn none() -> PngOptions {
 ///
 /// Example output: `"compression=6,palette=true,Q=80,dither=0.5"`
 pub fn to_vips_string(opts: PngOptions) -> String {
-  [
+  let options = [
     option.map(opts.compression, int_pair("compression", _)),
     option.map(opts.interlace, bool_pair("interlace", _)),
     option.map(opts.filter, fn(f) { "filter=" <> filter_name(f) }),
@@ -102,8 +102,8 @@ pub fn to_vips_string(opts: PngOptions) -> String {
     option.map(opts.page_height, int_pair("page-height", _)),
     option.map(opts.profile, fn(p) { "profile=" <> p }),
   ]
-  |> list.filter_map(fn(x) { option.to_result(x, Nil) })
-  |> string.join(",")
+
+  string.join(option.values(options), ",")
 }
 
 fn filter_name(f: PngFilter) -> String {

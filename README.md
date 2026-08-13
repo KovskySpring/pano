@@ -24,8 +24,7 @@ these overrides but it is recommended to set them in your `packs.toml` file inst
 ## Development
 
 See [mise.toml](mise.toml) for the development configuration.
-`pano` is written in gleam, built for the `erland` target, and
-packaged as a single executable.
+`pano` is written in gleam and built for the `erlang` target.
 
 You can run it with `gleam run` or build it with `gleam build`.
 

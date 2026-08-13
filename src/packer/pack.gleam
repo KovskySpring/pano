@@ -4,15 +4,13 @@
 //// For each atlas × variant it runs one headless JVM pack pass over the
 //// source folder, converts the libGDX `.atlas` text output to the Phaser
 //// multipack JSON the runtime already loads, then re-encodes each page with
-//// ansel/libvips into every compression output defined for that variant.
+//// the `vips` CLI into every compression output defined for that variant.
 ////
 //// Output directory layout mirrors `packer/spec`:
 ////   no variants   → `<target_dir>/`
 ////   has variants  → `<target_dir>/<variant.name>/`
 ////   + compression → `<target_dir>/<variant.name>/<compression.name>/`
 
-import ansel.{type Image}
-import ansel/image
 import filepath
 import gleam/int
 import gleam/io
@@ -45,6 +43,8 @@ type Job {
 }
 
 pub fn run(config: Config) -> snag.Result(Nil) {
+  use _ <- result.try(check_vips(config.vips))
+
   let jobs =
     list.flat_map(config.atlases, fn(atlas) {
       case atlas.variants {
@@ -102,6 +102,50 @@ pub fn run(config: Config) -> snag.Result(Nil) {
       io.println_error(issues)
       snag.error(int.to_string(list.length(errors)) <> " pack job(s) failed")
     }
+  }
+}
+
+/// libvips is user-installed, so fail once up front with an actionable message
+/// rather than once per page from deep inside the pool. The version is printed
+/// because the palette quantiser differs between libvips builds, so a build log
+/// that records it is the only way to explain a change in output size.
+fn check_vips(vips: String) -> snag.Result(Nil) {
+  use output <- result.try(
+    shellout.command(run: vips, with: ["--version"], in: ".", opt: [])
+    |> result.replace_error(snag.new(
+      "could not run `"
+      <> vips
+      <> "`; pano needs the libvips CLI (`brew install vips`, `apt install"
+      <> " libvips-tools`), or set `vips` in packs.toml to its path",
+    )),
+  )
+
+  let version = string.trim(output)
+  use _ <- result.try(case parse_version(version) {
+    // `keep=` replaced `strip=` in libvips 8.15; older builds reject it
+    // outright, which would fail on every page instead of once here.
+    Ok(#(major, minor)) ->
+      case major > 8 || { major == 8 && minor >= 15 } {
+        True -> Ok(Nil)
+        False ->
+          snag.error("libvips 8.15 or newer is required, found " <> version)
+      }
+    Error(Nil) -> Ok(Nil)
+  })
+
+  io.println("Using " <> version)
+  Ok(Nil)
+}
+
+/// `vips --version` prints `vips-8.18.5`.
+fn parse_version(version: String) -> Result(#(Int, Int), Nil) {
+  case string.split(string.replace(version, "vips-", ""), ".") {
+    [major, minor, ..] -> {
+      use major <- result.try(int.parse(major))
+      use minor <- result.try(int.parse(minor))
+      Ok(#(major, minor))
+    }
+    _ -> Error(Nil)
   }
 }
 
@@ -209,6 +253,7 @@ fn pack_in_scratch(
     job.out_dir,
     job.compression,
     job.factor,
+    config.vips,
   ))
 
   log_pack(job, pages)
@@ -239,18 +284,11 @@ fn write_pages(
   out_dir: String,
   compression: List(Compression),
   factor: Float,
+  vips: String,
 ) -> snag.Result(Nil) {
   case compression {
     [] -> Ok(Nil)
     items -> {
-      use loaded <- result.try(
-        list.try_map(pages, fn(page) {
-          image.read(from: filepath.join(pack_dir, page.image))
-          |> snag.context("reading " <> page.image)
-          |> result.map(fn(i) { #(i, page) })
-        }),
-      )
-
       use _ <- result.try(
         list.try_map(items, fn(compression) {
           let comp_dir = filepath.join(out_dir, compression.name)
@@ -258,7 +296,15 @@ fn write_pages(
             simplifile.create_directory_all(comp_dir)
             |> fs("creating " <> comp_dir)
           use _ <- result.try(create_result)
-          write_variant(atlas, loaded, compression, comp_dir, factor)
+          write_variant(
+            atlas,
+            pages,
+            pack_dir,
+            compression,
+            comp_dir,
+            factor,
+            vips,
+          )
         }),
       )
 
@@ -271,42 +317,35 @@ fn write_pages(
 /// plus the Phaser multiatlas JSON.
 fn write_variant(
   atlas: Spec,
-  loaded_pages: List(#(Image, Page)),
+  pages: List(Page),
+  pack_dir: String,
   compression: Compression,
   out_dir: String,
   factor: Float,
+  vips: String,
 ) -> snag.Result(Nil) {
   let named =
-    list.index_map(loaded_pages, fn(loaded_page, index) {
-      let #(data, page) = loaded_page
+    list.index_map(pages, fn(page, index) {
       let name = spec.page_image_name(atlas.name, atlas.indexed, index)
-      #(data, name, page)
+      #(name, page)
     })
 
   use _ <- result.try(
     list.try_map(named, fn(named_page) {
-      let #(loaded, name, _) = named_page
+      let #(name, page) = named_page
       encode.write(
-        loaded,
+        from: filepath.join(pack_dir, page.image),
         to: filepath.join(out_dir, name),
         format: compression.format,
+        using: vips,
       )
     }),
   )
 
-  let json_pages =
-    list.map(named, fn(named_page) {
-      let #(_, name, page) = named_page
-      #(name, page)
-    })
-
   let json = spec.json_name(atlas.name)
 
   let phaser_json =
-    simplifile.write(
-      filepath.join(out_dir, json),
-      phaser.encode(json_pages, factor),
-    )
+    simplifile.write(filepath.join(out_dir, json), phaser.encode(named, factor))
 
   fs(phaser_json, "writing " <> json)
 }

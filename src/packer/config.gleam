@@ -6,8 +6,10 @@
 ////
 //// ```toml
 //// jar = "path/to/texturepacker.jar"  # required; relative paths resolve
-//// concurrency = 8                    # against the config file's directory
-////                                    # (concurrency optional, default 8)
+////                                    # against the config file's directory.
+//// vips = "vips"                      # `vips` optional, default `vips` on
+////                                    # PATH;
+//// concurrency = 8                    # concurrency optional, default 8
 ////
 //// [[atlases]]
 //// name = "default-resources"         # required
@@ -43,10 +45,12 @@ import snag
 import tom.{type Toml}
 
 pub type Config {
-  Config(jar: String, concurrency: Int, atlases: List(Spec))
+  Config(jar: String, vips: String, concurrency: Int, atlases: List(Spec))
 }
 
 const default_concurrency = 8
+
+const default_vips = "vips"
 
 /// Read and parse a config file, then apply the environment overrides.
 pub fn load(path: String) -> snag.Result(Config) {
@@ -65,12 +69,34 @@ pub fn load(path: String) -> snag.Result(Config) {
 pub fn parse(text: String, base_dir base_dir: String) -> snag.Result(Config) {
   use doc <- result.try(result.map_error(tom.parse(text), parse_error_to_snag))
   use jar <- result.try(get_path(doc, "jar", base_dir))
+  use vips <- result.try(get_command(doc, "vips", default_vips, base_dir))
   use concurrency <- result.try(optional(
     tom.get_int(doc, ["concurrency"]),
     default_concurrency,
   ))
   use atlases <- result.try(get_atlases(doc, base_dir))
-  Ok(Config(jar:, concurrency:, atlases:))
+  Ok(Config(jar:, vips:, concurrency:, atlases:))
+}
+
+/// An external command is either a bare name to be looked up on `PATH`
+/// (`vips`) or a path to an executable, which resolves against `base_dir` like
+/// every other path in the config. Resolving a bare name would turn it into
+/// `./vips` and defeat the `PATH` lookup.
+fn get_command(
+  doc: Dict(String, Toml),
+  key: String,
+  default: String,
+  base_dir: String,
+) -> snag.Result(String) {
+  case tom.get_string(doc, [key]) {
+    Error(tom.NotFound(_)) -> Ok(default)
+    Error(error) -> Error(get_error_to_snag(error))
+    Ok(command) ->
+      case string.contains(command, "/") {
+        True -> Ok(resolve(command, base_dir))
+        False -> Ok(command)
+      }
+  }
 }
 
 fn apply_env_overrides(config: Config) -> Config {
