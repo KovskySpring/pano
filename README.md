@@ -1,72 +1,165 @@
-# texture_packer
+# pano - Phaser pAck N' Optimize
 
-Multi-scale headless texture packing for the game's Phaser runtime.
-
-For each atlas it packs the full-resolution source art once per output scale
-with the headless libGDX `runnable-texturepacker.jar`, converts the libGDX
-`.atlas` output to the Phaser multipack JSON the runtime already consumes
-(`load.multiatlas`), and writes `<name>.png` + `<name>.json` into
-`<target_dir>/<scale>/`.
+Multi-threaded texture packer for Phaser 3,
+using libGDX's TexturePacker under the hood.
 
 ## Usage
 
-All configuration — paths, concurrency, scales, and the atlas registry —
-lives in a `packs.toml` file, found in the current directory
-by default:
+All configuration lives in a `packs.toml` file.
 
 ```sh
-gleam run                              # pack every atlas in ./packs.toml
-gleam run -- --config=path/packs.toml  # explicit config location
+# pack every atlas in ./packs.toml
+pano
+# explicit config location
+pano --config path/to/packs.toml
 ```
 
-Environment overrides: `GDX_OUT_ROOT` replaces every atlas's `target_dir`,
-`GDX_CONCURRENCY` replaces `concurrency`.
-
-## packs.toml schema
-
-Relative paths resolve against the config file's directory.
-
-```toml
-jar = "path/to/texturepacker.jar"     # required
-concurrency = 8                       # optional, default 8
-
-[[atlases]]                           # at least one
-name = "default-resources"            # required
-source_dir = "images/default"         # required, the source image directory
-target_dir = "textures"               # required, output root for this atlas
-scales = [                            # required, at least one entry:
-  { dir = "1x", factor = 0.3472 },    # `dir` = output subdirectory under
-]                                     # target_dir, `factor` = downscale
-                                      # factor (1.0 = full res)
-indexed = true                        # optional, default true: page filenames
-                                      # carry a -<index> suffix
-
-# Optional libGDX TexturePacker overrides, all defaulting to the values
-# below. See `src/packer/settings.gleam` for what each one does.
-pot = false
-padding_x = 2
-padding_y = 2
-edge_padding = true
-duplicate_padding = true
-rotation = false
-strip_whitespace_x = true
-strip_whitespace_y = true
-alpha_threshold = 0
-filter_min = "Linear"
-filter_mag = "Linear"
-format = "RGBA8888"
-max_width = 2048
-max_height = 2048
-combine_subdirectories = true
-flatten_paths = false
-use_indexes = false
-bleed = true
-scale_resampling = "bicubic"
-```
+Because `pano` uses libGDX's TexturePacker standalone jar,
+you must have it installed and referenced in your `packs.toml` file.
+libGDX's TexturePacker reads environment overrides:
+`GDX_OUT_ROOT` to replace every atlas's `target_dir` and
+`GDX_CONCURRENCY` to replaces `concurrency`. `pano` respects
+these overrides but it is recommended to set them in your `packs.toml` file instead.
 
 ## Development
 
-```sh
-gleam test              # unit + birdie snapshot tests
-gleam run -m birdie     # review changed snapshots
+See [mise.toml](mise.toml) for the development configuration.
+`pano` is written in gleam, built for the `erland` target, and
+packaged as a single executable.
+
+You can run it with `gleam run` or build it with `gleam build`.
+
+Testing is done with `birdie`, run `gleam test` to run the tests.
+
+## packs.toml
+
+All configuration lives in a single `packs.toml` file.
+Relative paths in the file always resolve against the directory that contains it.
+
+### Top-level keys
+
+| Key           | Type   | Required | Default | Description                                   |
+| ------------- | ------ | -------- | ------- | --------------------------------------------- |
+| `jar`         | string | ✓        | —       | Path to the runnable `texturepacker.jar`.     |
+| `concurrency` | int    |          | `8`     | Maximum number of atlases packed in parallel. |
+
+### `[[atlases]]`
+
+Each entry in the `[[atlases]]` array defines one atlas to pack.
+
+| Key          | Type   | Required | Default | Description                                                                                                                     |
+| ------------ | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `name`       | string | ✓        | —       | Atlas name. Used as the base filename for all outputs (`<name>.json`, `<name>.png`, …).                                         |
+| `source_dir` | string | ✓        | —       | Directory containing the source images to pack.                                                                                 |
+| `target_dir` | string | ✓        | —       | Root output directory for this atlas.                                                                                           |
+| `indexed`    | bool   |          | `true`  | When `true`, page image files carry a `-<index>` numeric suffix (e.g. `atlas-0.png`). Set to `false` to get a bare `atlas.png`. |
+
+#### libGDX TexturePacker settings
+
+All of the following keys are optional and sit directly inside an `[[atlases]]` entry.
+They map to libGDX TexturePacker settings and are forwarded verbatim to the packer.
+
+| Key                      | Type   | Default      | Description                                                                    |
+| ------------------------ | ------ | ------------ | ------------------------------------------------------------------------------ |
+| `pot`                    | bool   | `false`      | Force power-of-two page dimensions.                                            |
+| `padding_x`              | int    | `2`          | Pixels of padding added to the left and right of each sprite.                  |
+| `padding_y`              | int    | `2`          | Pixels of padding added to the top and bottom of each sprite.                  |
+| `edge_padding`           | bool   | `true`       | Add padding around the edges of each page.                                     |
+| `duplicate_padding`      | bool   | `true`       | Duplicate pixels into the padding region to reduce texture bleeding.           |
+| `rotation`               | bool   | `false`      | Allow sprites to be rotated 90° to improve packing.                            |
+| `strip_whitespace_x`     | bool   | `true`       | Strip transparent pixels from the left and right sides of sprites.             |
+| `strip_whitespace_y`     | bool   | `true`       | Strip transparent pixels from the top and bottom sides of sprites.             |
+| `alpha_threshold`        | int    | `0`          | Pixels with alpha ≤ this value are treated as fully transparent.               |
+| `filter_min`             | string | `"Linear"`   | Minification filter (`Linear`, `Nearest`, …).                                  |
+| `filter_mag`             | string | `"Linear"`   | Magnification filter (`Linear`, `Nearest`, …).                                 |
+| `format`                 | string | `"RGBA8888"` | Pixel format passed to the packer (e.g. `RGBA8888`, `RGB888`).                 |
+| `max_width`              | int    | `2048`       | Maximum page width in pixels.                                                  |
+| `max_height`             | int    | `2048`       | Maximum page height in pixels.                                                 |
+| `combine_subdirectories` | bool   | `true`       | Treat all subdirectories of `source_dir` as part of the same atlas.            |
+| `flatten_paths`          | bool   | `false`      | Strip directory prefixes from sprite names in the atlas.                       |
+| `use_indexes`            | bool   | `false`      | Append a numeric index to sprite names for animation frames.                   |
+| `bleed`                  | bool   | `true`       | Extend the border pixels of sprites into the padding to avoid colour fringing. |
+| `scale_resampling`       | string | `"bicubic"`  | Resampling algorithm used when downscaling (`bicubic`, `bilinear`, `nearest`). |
+
+### `[atlases.variants.<name>]`
+
+Variants produce one scaled output per entry.
+When no variants are declared the atlas is packed once at factor `1.0` directly into `target_dir`.
+When variants are present each one writes into `<target_dir>/<variant-name>/`.
+
+The `<name>` key is arbitrary and becomes the subdirectory name (e.g. `1x`, `2x`).
+
+| Key      | Type  | Required | Description                                                                         |
+| -------- | ----- | -------- | ----------------------------------------------------------------------------------- |
+| `factor` | float | ✓        | Scale factor applied to the source images for this pass (e.g. `0.5` for half-size). |
+
+### `[atlases.variants.<name>.compression.<name>]`
+
+Each compression entry re-encodes the variant's output pages with `libvips`.
+The `<name>` key is arbitrary and becomes a subdirectory under the variant's output (`<target_dir>/<variant>/<compression>/`).
+When no compression entries are declared the variant's raw packer output is kept as-is.
+
+| Key           | Type  | Default | Description                                                                                                            |
+| ------------- | ----- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `depth`       | int   | —       | Bit depth. `≤ 8` enables palette quantisation (libimagequant); absent or `> 8` uses full-colour with all zlib filters. |
+| `quality`     | int   | `100`   | PNG quality / quantisation quality (0–100).                                                                            |
+| `dither`      | float | `1.0`   | Dithering strength for palette quantisation (0.0–1.0).                                                                 |
+| `compression` | int   | `9`     | zlib compression level (0–9).                                                                                          |
+| `strip`       | bool  | `true`  | Strip all metadata from output images when `true`.                                                                     |
+
+### Annotated example
+
+```toml
+jar = "vendor/runnable-texturepacker.jar"
+concurrency = 4
+
+[[atlases]]
+name       = "ui-resources"
+source_dir = "assets/images/ui"
+target_dir = "assets/textures"
+# indexed = true  # default; produces ui-resources-0.png, ui-resources-1.png, …
+
+# libGDX settings override (all optional)
+max_width  = 4096
+max_height = 4096
+rotation   = true
+
+[atlases.variants.1x]
+factor = 0.5
+
+[atlases.variants.1x.compression.8bit]
+# depth ≤ 8 → palette quantisation via libimagequant
+depth       = 8
+quality     = 85
+dither      = 0.8
+compression = 9
+strip       = true
+
+[atlases.variants.2x]
+factor = 1.0
+# no compression block → keep the packer's raw output
 ```
+
+Output layout for the example above:
+
+```
+assets/textures/
+  1x/
+    ui-resources-0.png          # raw packer output
+    8bit/
+      ui-resources-0.png        # palette-quantised copy
+  2x/
+    ui-resources-0.png          # raw packer output
+  ui-resources.json             # Phaser multiatlas descriptor
+```
+
+### Environment overrides
+
+| Variable          | Overrides                                   |
+| ----------------- | ------------------------------------------- |
+| `GDX_OUT_ROOT`    | Replaces `target_dir` for every atlas.      |
+| `GDX_CONCURRENCY` | Replaces the top-level `concurrency` value. |
+
+## License
+
+Apache 2.0, see [LICENSE](LICENSE) for details.

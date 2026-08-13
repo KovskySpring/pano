@@ -1,6 +1,7 @@
 name = "texture_packer"
 version = "1.0.0"
 description = "Multi-scale headless GDX texture packing into Phaser multiatlas format"
+licences = ["Apache-2.0"]
 
 # Fill out these fields if you intend to generate HTML documentation or publish
 # your project to the Hex package manager.
