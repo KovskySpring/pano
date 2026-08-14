@@ -1,5 +1,5 @@
 name = "pano"
-version = "1.0.0"
+version = "1.0.1"
 description = "Multi-scale headless GDX texture packing into Phaser multiatlas format"
 licences = ["Apache-2.0"]
 target = "erlang"
