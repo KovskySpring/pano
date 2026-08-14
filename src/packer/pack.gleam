@@ -43,7 +43,11 @@ type Job {
 }
 
 pub fn run(config: Config) -> snag.Result(Nil) {
-  use _ <- result.try(check_vips(config.vips))
+  use _ <- result.try(check_java())
+  use _ <- result.try(case uses_compression(config) {
+    True -> check_vips(config.vips)
+    False -> Ok(Nil)
+  })
 
   let jobs =
     list.flat_map(config.atlases, fn(atlas) {
@@ -145,6 +149,57 @@ fn parse_version(version: String) -> Result(#(Int, Int), Nil) {
       use minor <- result.try(int.parse(minor))
       Ok(#(major, minor))
     }
+    _ -> Error(Nil)
+  }
+}
+
+/// `vips` is only ever shelled out to for atlases/variants that declare a
+/// `[compression]` table (see `write_pages`), so a config with none never
+/// needs libvips installed at all.
+fn uses_compression(config: Config) -> Bool {
+  list.any(config.atlases, fn(atlas) {
+    list.any(atlas.variants, fn(v) { v.compression != [] })
+  })
+}
+
+/// A JVM is user-installed, so fail once up front with an actionable message
+/// rather than once per atlas from deep inside the pool.
+fn check_java() -> snag.Result(Nil) {
+  use output <- result.try(
+    shellout.command(run: "java", with: ["-version"], in: ".", opt: [])
+    |> result.replace_error(snag.new(
+      "could not run `java`; pano needs a JVM to run libGDX TexturePacker"
+      <> " (install a JRE/JDK 8+)",
+    )),
+  )
+
+  let version = string.trim(output)
+  use _ <- result.try(case parse_java_version(version) {
+    Ok(major) ->
+      case major >= 8 {
+        True -> Ok(Nil)
+        False -> snag.error("Java 8 or newer is required, found " <> version)
+      }
+    // A version string in an unrecognised shape shouldn't block a pack run;
+    // it just means the message below can't confirm the version.
+    Error(Nil) -> Ok(Nil)
+  })
+
+  io.println("Using " <> version)
+  Ok(Nil)
+}
+
+/// `java -version` writes its first line to stderr (merged into `output` by
+/// `shellout`), e.g. `openjdk version "17.0.8" 2023-07-18` or, pre-JEP 223,
+/// `java version "1.8.0_311"`. Versions before 9 are prefixed with `1.`, so
+/// `1.8.0_311` means major version 8, not 1.
+fn parse_java_version(output: String) -> Result(Int, Nil) {
+  use line <- result.try(list.first(string.split(output, "\n")))
+  use #(_, after_quote) <- result.try(string.split_once(line, "\""))
+  use #(version, _) <- result.try(string.split_once(after_quote, "\""))
+  case string.split(version, ".") {
+    ["1", minor, ..] -> int.parse(minor)
+    [major, ..] -> int.parse(major)
     _ -> Error(Nil)
   }
 }
