@@ -1,7 +1,24 @@
 # pano - Phaser Pack N' Optimize
 
 Multi-threaded texture packer for Phaser 3,
-using libGDX's TexturePacker under the hood.
+using libGDX's TexturePacker and `libvips` under the hood.
+
+## Prerequisites
+
+- Erlang/OTP 27+ (for running the `pano` escript). Checked at startup; older releases are rejected.
+- A JVM (Java 8+) on `PATH` as `java` (for libGDX's TexturePacker). Checked before packing.
+- `runnable-texturepacker.jar` (for libGDX's TexturePacker). See [libGDX's TexturePacker](https://libgdx.com/wiki/tools/texture-packer).
+- libvips 8.15+ CLI on `PATH` as `vips` (for PNG compression, `keep=` option requires 8.15+). Checked before packing, but only if any `[compression]` table is configured.
+
+## Installation
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/KovskySpring/pano/main/scripts/install.sh | sh
+```
+
+`pano` is a single escript, installed to `~/.local/bin/pano` (overridable with
+`PANO_BIN_DIR`). It is pure BEAM bytecode, so the same file runs on every OS
+and architecture.
 
 ## Usage
 

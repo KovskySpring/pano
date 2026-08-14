@@ -1,0 +1,52 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MISE_EXPERIMENTAL: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v3
+      - run: mise run ci
+      - run: gleam deps download
+      - run: gleam export escript
+      - run: |
+          mkdir -p dist
+          mv -f pano dist/pano
+          ./dist/pano --help > /dev/null
+          sha256sum dist/pano > dist/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pano
+          path: dist/pano
+          if-no-files-found: error
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            dist/pano
+            dist/SHA256SUMS
+          body: |
+            Install:
+
+            ```sh
+            curl -fsSL https://raw.githubusercontent.com/KovskySpring/pano/${{ github.ref_name }}/scripts/install.sh | sh
+            ```
+
+            Requires Erlang/OTP 27+, libvips 8.15+ (`vips` on PATH), and a JVM.
