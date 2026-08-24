@@ -63,12 +63,11 @@ Relative paths in the file always resolve against the directory that contains it
 
 Each entry in the `[[atlases]]` array defines one atlas to pack.
 
-| Key          | Type   | Required | Default | Description                                                                                                                     |
-| ------------ | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `name`       | string | ✓        | —       | Atlas name. Used as the base filename for all outputs (`<name>.json`, `<name>.png`, …).                                         |
-| `source_dir` | string | ✓        | —       | Directory containing the source images to pack.                                                                                 |
-| `target_dir` | string | ✓        | —       | Root output directory for this atlas.                                                                                           |
-| `indexed`    | bool   |          | `true`  | When `true`, page image files carry a `-<index>` numeric suffix (e.g. `atlas-0.png`). Set to `false` to get a bare `atlas.png`. |
+| Key          | Type   | Required | Default | Description                                                                             |
+| ------------ | ------ | -------- | ------- | --------------------------------------------------------------------------------------- |
+| `name`       | string | ✓        | —       | Atlas name. Used as the base filename for all outputs (`<name>.json`, `<name>.png`, …). |
+| `source_dir` | string | ✓        | —       | Directory containing the source images to pack.                                         |
+| `target_dir` | string | ✓        | —       | Root output directory for this atlas.                                                   |
 
 #### libGDX TexturePacker settings
 
@@ -133,7 +132,6 @@ concurrency = 4
 name       = "ui-resources"
 source_dir = "assets/images/ui"
 target_dir = "assets/textures"
-# indexed = true  # default; produces ui-resources-0.png, ui-resources-1.png, …
 
 # libGDX settings override (all optional)
 max_width  = 4096

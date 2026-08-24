@@ -176,11 +176,9 @@ fn get_atlas(item: Toml, base_dir: String) -> snag.Result(Spec) {
   use source_dir <- result.try(get_path(table, "source_dir", base_dir))
   use target_dir <- result.try(get_path(table, "target_dir", base_dir))
   use variants <- result.try(get_variants(table))
-  use indexed <- result.try(optional(tom.get_bool(table, ["indexed"]), True))
   use gdx_settings <- result.try(get_gdx_settings(table))
 
-  let spec =
-    Ok(Spec(name:, source_dir:, target_dir:, variants:, indexed:, gdx_settings:))
+  let spec = Ok(Spec(name:, source_dir:, target_dir:, variants:, gdx_settings:))
 
   snag.context(spec, "in atlas `" <> name <> "`")
 }

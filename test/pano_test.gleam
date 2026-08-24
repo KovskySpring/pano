@@ -118,15 +118,13 @@ const default_gdx_settings = Settings(
 )
 
 pub fn page_image_name_test() {
-  // Indexed atlases always carry the page index, even single-page.
-  assert spec.page_image_name("default-resources", True, 0)
+  assert spec.page_image_name("default-resources", 0)
     == "default-resources-0.png"
-  assert spec.page_image_name("default-resources-32", True, 1)
+  assert spec.page_image_name("default-resources-32", 1)
     == "default-resources-32-1.png"
 
-  // Un-indexed atlases carry no page index.
-  assert spec.page_image_name("cities-resources-germany", False, 0)
-    == "cities-resources-germany.png"
+  assert spec.page_image_name("cities-resources-germany", 0)
+    == "cities-resources-germany-0.png"
 }
 
 pub fn json_name_test() {
@@ -153,7 +151,6 @@ factor = 1
 name = \"cities-resources-brazil\"
 source_dir = \"art/cities/brazil\"
 target_dir = \"textures\"
-indexed = false
 
 [atlases.variants.1x]
 factor = 0.5
@@ -168,15 +165,12 @@ pub fn config_parse_test() {
   assert parsed.concurrency == 8
 
   let assert [default, brazil] = parsed.atlases
-  // Optional fields default to: indexed, the fixed gdx_settings template. An
-  // integer `factor = 1` is accepted alongside floats.
   assert default
     == Spec(
       name: "default-resources",
       source_dir: "repo/art/default",
       target_dir: "/absolute/textures",
       variants: [Variant("1x", 0.5, []), Variant("2x", 1.0, [])],
-      indexed: True,
       gdx_settings: default_gdx_settings,
     )
 
@@ -184,7 +178,6 @@ pub fn config_parse_test() {
   assert brazil.source_dir == "repo/art/cities/brazil"
   assert brazil.target_dir == "repo/textures"
   assert brazil.variants == [Variant("1x", 0.5, [])]
-  assert !brazil.indexed
 }
 
 const compression_config = "
@@ -280,5 +273,4 @@ pub fn shipped_config_test() {
   assert germany.source_dir
     == "test/../../assets/original/images/cities/germany"
   assert list.length(germany.variants) == 3
-  assert !germany.indexed
 }

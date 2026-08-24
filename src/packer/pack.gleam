@@ -294,7 +294,6 @@ fn pack_in_scratch(
   use pages <- result.try(
     gdx_atlas.parse(atlas_text) |> snag.context("parsing " <> atlas_path),
   )
-  use _ <- result.try(check_page_count(atlas, pages))
 
   use _ <- result.try(fs(
     simplifile.create_directory_all(job.out_dir),
@@ -313,21 +312,6 @@ fn pack_in_scratch(
 
   log_pack(job, pages)
   Ok(Nil)
-}
-
-/// Un-indexed page names have no `-<index>` marker, so a multi-page pack
-/// would silently overwrite its own pages.
-fn check_page_count(atlas: Spec, pages: List(Page)) -> snag.Result(Nil) {
-  case atlas.indexed, pages {
-    False, [_, _, ..] ->
-      snag.error(
-        "atlas overflowed onto "
-        <> int.to_string(list.length(pages))
-        <> " pages but its filenames are un-indexed; pages would overwrite"
-        <> " each other. Mark it indexed or shrink the source art.",
-      )
-    _, _ -> Ok(Nil)
-  }
 }
 
 /// Re-encode every libGDX page into each compression output, each written
@@ -381,7 +365,7 @@ fn write_variant(
 ) -> snag.Result(Nil) {
   let named =
     list.index_map(pages, fn(page, index) {
-      let name = spec.page_image_name(atlas.name, atlas.indexed, index)
+      let name = spec.page_image_name(atlas.name, index)
       #(name, page)
     })
 

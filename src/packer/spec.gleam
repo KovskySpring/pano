@@ -21,8 +21,6 @@ pub type Spec {
     /// variant's scale factor. Empty means pack once at factor 1.0,
     /// writing directly into `target_dir`.
     variants: List(Variant),
-    /// Whether page filenames carry a `-<index>` suffix.
-    indexed: Bool,
     /// libGDX TexturePacker settings for this atlas.
     gdx_settings: Settings,
   )
@@ -45,18 +43,9 @@ pub type Compression {
   Compression(name: String, format: Format)
 }
 
-/// Page output filename for the given atlas name, page index, and indexed flag.
-/// e.g. `page_image_name("atlas", True, 0)` → `"atlas-0.png"`.
-pub fn page_image_name(
-  atlas_name: String,
-  indexed: Bool,
-  index: Int,
-) -> String {
-  let page_index = case indexed {
-    True -> "-" <> int.to_string(index)
-    False -> ""
-  }
-  atlas_name <> page_index <> ".png"
+/// Page output filename for the given atlas name, page index
+pub fn page_image_name(atlas_name: String, index: Int) -> String {
+  atlas_name <> "-" <> int.to_string(index) <> ".png"
 }
 
 /// JSON output filename for the atlas (e.g. `"atlas.json"`).
