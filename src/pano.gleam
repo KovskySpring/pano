@@ -10,42 +10,50 @@
 
 import argv
 import gleam/io
+import gleam/result
 import glint
 import packer/config
 import packer/pack
 import shellout
 import snag
 
+const app_name = "pano"
+
+const flag_config = "config"
+
+const default_config_filename = "packs.toml"
+
+const message_about = "Multi-threaded texture packer for Phaser 3, using libGDX's TexturePacker and libvips under the hood."
+
+const message_help_config = "Path to the packs.toml config (default: packs.toml in the current directory)"
+
 pub fn main() {
   glint.new()
-  |> glint.with_name("pano")
+  |> glint.with_name(app_name)
   |> glint.pretty_help(glint.default_pretty_help())
   |> glint.add(at: [], do: pack_command())
   |> glint.run(argv.load().arguments)
 }
 
 fn pack_command() -> glint.Command(Nil) {
-  use <- glint.command_help(
-    "Multi-threaded texture packer for Phaser 3, using libGDX's TexturePacker and libvips under the hood.",
-  )
+  use <- glint.command_help(message_about)
+
   use config_flag <- glint.flag(
-    glint.string_flag("config")
-    |> glint.flag_default("packs.toml")
-    |> glint.flag_help(
-      "Path to the packs.toml config (default: packs.toml in the current"
-      <> " directory)",
-    ),
+    glint.string_flag(flag_config)
+    |> glint.flag_default(default_config_filename)
+    |> glint.flag_help(message_help_config),
   )
+
   use _, _, flags <- glint.command()
 
-  let assert Ok(config_path) = config_flag(flags)
-  case config.load(config_path) {
+  let outcome =
+    config_flag(flags)
+    |> result.try(config.load)
+    |> result.map(pack.run)
+
+  case outcome {
+    Ok(_) -> Nil
     Error(issue) -> fail(issue)
-    Ok(loaded) ->
-      case pack.run(loaded) {
-        Ok(Nil) -> Nil
-        Error(issue) -> fail(issue)
-      }
   }
 }
 

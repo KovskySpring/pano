@@ -87,6 +87,7 @@ pub fn run(config: Config) -> snag.Result(Nil) {
 
   let results =
     pool.map(jobs, limit: config.concurrency, run: run_job(_, config))
+
   let #(_, errors) = result.partition(results)
 
   case errors {

@@ -52,27 +52,28 @@ pub fn default() -> Settings {
 }
 
 pub fn encode(settings: Settings, scale scale: Float) -> String {
-  json.object([
-    #("pot", json.bool(settings.pot)),
-    #("paddingX", json.int(settings.padding_x)),
-    #("paddingY", json.int(settings.padding_y)),
-    #("edgePadding", json.bool(settings.edge_padding)),
-    #("duplicatePadding", json.bool(settings.duplicate_padding)),
-    #("rotation", json.bool(settings.rotation)),
-    #("stripWhitespaceX", json.bool(settings.strip_whitespace_x)),
-    #("stripWhitespaceY", json.bool(settings.strip_whitespace_y)),
-    #("alphaThreshold", json.int(settings.alpha_threshold)),
-    #("filterMin", json.string(settings.filter_min)),
-    #("filterMag", json.string(settings.filter_mag)),
-    #("format", json.string(settings.format)),
-    #("maxWidth", json.int(settings.max_width)),
-    #("maxHeight", json.int(settings.max_height)),
-    #("combineSubdirectories", json.bool(settings.combine_subdirectories)),
-    #("flattenPaths", json.bool(settings.flatten_paths)),
-    #("useIndexes", json.bool(settings.use_indexes)),
-    #("bleed", json.bool(settings.bleed)),
-    #("scaleResampling", json.array([settings.scale_resampling], json.string)),
-    #("scale", json.array([scale], json.float)),
-  ])
-  |> json.to_string
+  json.to_string(
+    json.object([
+      #("pot", json.bool(settings.pot)),
+      #("paddingX", json.int(settings.padding_x)),
+      #("paddingY", json.int(settings.padding_y)),
+      #("edgePadding", json.bool(settings.edge_padding)),
+      #("duplicatePadding", json.bool(settings.duplicate_padding)),
+      #("rotation", json.bool(settings.rotation)),
+      #("stripWhitespaceX", json.bool(settings.strip_whitespace_x)),
+      #("stripWhitespaceY", json.bool(settings.strip_whitespace_y)),
+      #("alphaThreshold", json.int(settings.alpha_threshold)),
+      #("filterMin", json.string(settings.filter_min)),
+      #("filterMag", json.string(settings.filter_mag)),
+      #("format", json.string(settings.format)),
+      #("maxWidth", json.int(settings.max_width)),
+      #("maxHeight", json.int(settings.max_height)),
+      #("combineSubdirectories", json.bool(settings.combine_subdirectories)),
+      #("flattenPaths", json.bool(settings.flatten_paths)),
+      #("useIndexes", json.bool(settings.use_indexes)),
+      #("bleed", json.bool(settings.bleed)),
+      #("scaleResampling", json.array([settings.scale_resampling], json.string)),
+      #("scale", json.array([scale], json.float)),
+    ]),
+  )
 }
