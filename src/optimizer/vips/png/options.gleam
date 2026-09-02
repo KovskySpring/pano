@@ -31,6 +31,7 @@ pub type Keep {
   KeepIptc
   KeepIcc
   KeepOther
+  KeepGainmap
   KeepAll
 }
 
@@ -125,6 +126,7 @@ fn keep_name(k: Keep) -> String {
     KeepIptc -> "iptc"
     KeepIcc -> "icc"
     KeepOther -> "other"
+    KeepGainmap -> "gainmap"
     KeepAll -> "all"
   }
 }
