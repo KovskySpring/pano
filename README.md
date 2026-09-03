@@ -52,12 +52,19 @@ Testing is done with `birdie`, run `gleam test` to run the tests.
 All configuration lives in a single `packs.toml` file.
 Relative paths in the file always resolve against the directory that contains it.
 
+### Editor intellisense
+
+[`./editors/schema.json`](schema.json) documents the full shape of `packs.toml` and can be
+wired up to editors that support JSON Schema for TOML for autocomplete, inline docs,
+and validation.
+
 ### Top-level keys
 
-| Key           | Type   | Required | Default | Description                                   |
-| ------------- | ------ | -------- | ------- | --------------------------------------------- |
-| `jar`         | string | ✓        | —       | Path to the runnable `texturepacker.jar`.     |
-| `concurrency` | int    |          | `8`     | Maximum number of atlases packed in parallel. |
+| Key           | Type   | Required | Default  | Description                                                                                                               |
+| ------------- | ------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `jar`         | string | ✓        | -        | Path to the runnable `texturepacker.jar`.                                                                                 |
+| `vips`        | string |          | `"vips"` | The `vips` executable. A bare name is looked up on `PATH`; a value containing `/` resolves against this file's directory. |
+| `concurrency` | int    |          | `8`      | Maximum number of atlases packed in parallel. Values below 1 are clamped to 1.                                            |
 
 ### `[[atlases]]`
 
@@ -65,9 +72,9 @@ Each entry in the `[[atlases]]` array defines one atlas to pack.
 
 | Key          | Type   | Required | Default | Description                                                                             |
 | ------------ | ------ | -------- | ------- | --------------------------------------------------------------------------------------- |
-| `name`       | string | ✓        | —       | Atlas name. Used as the base filename for all outputs (`<name>.json`, `<name>.png`, …). |
-| `source_dir` | string | ✓        | —       | Directory containing the source images to pack.                                         |
-| `target_dir` | string | ✓        | —       | Root output directory for this atlas.                                                   |
+| `name`       | string | ✓        | -       | Atlas name. Used as the base filename for all outputs (`<name>.json`, `<name>.png`, …). |
+| `source_dir` | string | ✓        | -       | Directory containing the source images to pack.                                         |
+| `target_dir` | string | ✓        | -       | Root output directory for this atlas.                                                   |
 
 #### libGDX TexturePacker settings
 
@@ -114,13 +121,35 @@ Each compression entry re-encodes the variant's output pages with `libvips`.
 The `<name>` key is arbitrary and becomes a subdirectory under the variant's output (`<target_dir>/<variant>/<compression>/`).
 When no compression entries are declared the variant's raw packer output is kept as-is.
 
-| Key           | Type  | Default | Description                                                                                                            |
-| ------------- | ----- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `depth`       | int   | —       | Bit depth. `≤ 8` enables palette quantisation (libimagequant); absent or `> 8` uses full-colour with all zlib filters. |
-| `quality`     | int   | `100`   | PNG quality / quantisation quality (0–100).                                                                            |
-| `dither`      | float | `1.0`   | Dithering strength for palette quantisation (0.0–1.0).                                                                 |
-| `compression` | int   | `9`     | zlib compression level (0–9).                                                                                          |
-| `strip`       | bool  | `true`  | Strip all metadata from output images when `true`.                                                                     |
+Every option `vips pngsave` accepts is available here, so you should not need to go
+looking through the vips docs. Each key names the vips option it maps to; the four
+with a pano default are always sent, and any key you leave out is omitted from the
+vips call entirely, leaving vips its own default.
+
+| Key           | Type     | vips option   | pano default | vips default | Description                                                                                                                   |
+| ------------- | -------- | ------------- | ------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `depth`       | int      | `bitdepth`    | -            | `8`          | Bit depth, one of `1`, `2`, `4`, `8`, `16`. `≤ 8` selects palette quantisation (libimagequant), larger uses every row filter. |
+| `quality`     | int      | `Q`           | `100`        | `100`        | Quantisation quality, 0–100. Always sent, but only meaningful when palette quantisation is active.                            |
+| `dither`      | float    | `dither`      | `1.0`        | `1.0`        | Dithering strength for palette quantisation, 0.0–1.0.                                                                         |
+| `compression` | int      | `compression` | `9`          | `6`          | zlib compression level, 0–9. Higher is smaller and slower.                                                                    |
+| `strip`       | bool     | `keep`        | `true`       | -            | Shorthand: `true` sends `keep = ["none"]`, `false` keeps everything. Cannot be combined with `keep`.                          |
+| `keep`        | string[] | `keep`        | -            | all blocks   | Metadata blocks to retain: `none`, `exif`, `xmp`, `iptc`, `icc`, `other`, `gainmap`, `all`. Cannot be combined with `strip`.  |
+| `filter`      | string[] | `filter`      | see note     | `none`       | Row filters: `none`, `sub`, `up`, `avg`, `paeth`, `all`. Defaults to `["all"]` unless `depth` selects palette quantisation.   |
+| `palette`     | bool     | `palette`     | see note     | `false`      | Quantise to a palette (indexed) PNG. Defaults to on when `depth ≤ 8`; set it to override.                                     |
+| `effort`      | int      | `effort`      | -            | `7`          | CPU effort for palette quantisation, 1–10. Higher is better quality and slower.                                               |
+| `interlace`   | bool     | `interlace`   | -            | `false`      | Write an interlaced (Adam7) PNG. Requires the full image in memory.                                                           |
+| `background`  | number[] | `background`  | -            | -            | Background colour used when flattening alpha, e.g. `[255, 255, 255]`.                                                         |
+| `page_height` | int      | `page-height` | -            | `0`          | Page height for a multi-page save, in pixels.                                                                                 |
+| `profile`     | string   | `profile`     | -            | -            | ICC profile to embed: a built-in name (`srgb`, `p3`, `cmyk`) or a path, resolved against the config's directory.              |
+
+`keep` and `filter` are flag _sets_ - pass an array and pano joins it with `:` for vips
+(`keep = ["exif", "icc"]` becomes `keep=exif:icc`). For both, `none` is absorbing, as is
+`all` for `keep`. An empty array omits the option.
+
+Two things to know about ranges. vips **clamps** out-of-range numbers instead of
+rejecting them, so `quality = 101` silently becomes `100` - the bounds above are worth
+respecting even though nothing errors. `depth` is the exception: vips accepts only
+`1`, `2`, `4`, `8` or `16` and fails on anything else.
 
 ### Annotated example
 
@@ -147,7 +176,15 @@ depth       = 8
 quality     = 85
 dither      = 0.8
 compression = 9
+effort      = 10          # only meaningful while quantising
 strip       = true
+
+[atlases.variants.1x.compression.archival]
+# full colour, keeping the colour profile and choosing filters by hand
+depth   = 16
+filter  = ["sub", "paeth"]
+keep    = ["icc"]
+profile = "srgb"
 
 [atlases.variants.2x]
 factor = 1.0
@@ -162,6 +199,8 @@ assets/textures/
     ui-resources-0.png          # raw packer output
     8bit/
       ui-resources-0.png        # palette-quantised copy
+    archival/
+      ui-resources-0.png        # 16-bit copy with an embedded profile
   2x/
     ui-resources-0.png          # raw packer output
   ui-resources.json             # Phaser multiatlas descriptor

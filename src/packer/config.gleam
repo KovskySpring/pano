@@ -130,7 +130,10 @@ fn resolve(path: String, base_dir: String) -> String {
   }
 }
 
-fn get_variants(table: Dict(String, Toml)) -> snag.Result(List(Variant)) {
+fn get_variants(
+  table: Dict(String, Toml),
+  base_dir: String,
+) -> snag.Result(List(Variant)) {
   case tom.get_table(table, ["variants"]) {
     Error(tom.NotFound(_)) -> Ok([])
     Error(error) -> Error(get_error_to_snag(error))
@@ -138,17 +141,20 @@ fn get_variants(table: Dict(String, Toml)) -> snag.Result(List(Variant)) {
       variants_table
       |> dict.to_list
       |> list.sort(fn(a, b) { string.compare(a.0, b.0) })
-      |> list.try_map(get_variant_entry)
+      |> list.try_map(get_variant_entry(_, base_dir))
   }
 }
 
-fn get_variant_entry(entry: #(String, Toml)) -> snag.Result(Variant) {
+fn get_variant_entry(
+  entry: #(String, Toml),
+  base_dir: String,
+) -> snag.Result(Variant) {
   let #(name, toml) = entry
   let variant = {
     use vt <- result.try(required(tom.as_table(toml)))
     use factor <- result.try(required(tom.get_number(vt, ["factor"])))
     use f_factor <- result.try(to_float(factor))
-    use compression <- result.try(get_compression(vt))
+    use compression <- result.try(get_compression(vt, base_dir))
     Ok(Variant(name:, factor: f_factor, compression:))
   }
   snag.context(variant, "in variant `" <> name <> "`")
@@ -175,7 +181,7 @@ fn get_atlas(item: Toml, base_dir: String) -> snag.Result(Spec) {
   use name <- result.try(required(tom.get_string(table, ["name"])))
   use source_dir <- result.try(get_path(table, "source_dir", base_dir))
   use target_dir <- result.try(get_path(table, "target_dir", base_dir))
-  use variants <- result.try(get_variants(table))
+  use variants <- result.try(get_variants(table, base_dir))
   use gdx_settings <- result.try(get_gdx_settings(table))
 
   let spec = Ok(Spec(name:, source_dir:, target_dir:, variants:, gdx_settings:))
@@ -185,6 +191,7 @@ fn get_atlas(item: Toml, base_dir: String) -> snag.Result(Spec) {
 
 fn get_compression(
   table: Dict(String, Toml),
+  base_dir: String,
 ) -> snag.Result(List(Compression)) {
   case tom.get_table(table, ["compression"]) {
     Error(tom.NotFound(_)) -> Ok([])
@@ -193,15 +200,18 @@ fn get_compression(
       compression_table
       |> dict.to_list
       |> list.sort(fn(a, b) { string.compare(a.0, b.0) })
-      |> list.try_map(get_compression_entry)
+      |> list.try_map(get_compression_entry(_, base_dir))
   }
 }
 
-fn get_compression_entry(entry: #(String, Toml)) -> snag.Result(Compression) {
+fn get_compression_entry(
+  entry: #(String, Toml),
+  base_dir: String,
+) -> snag.Result(Compression) {
   let #(name, toml) = entry
   let compression = {
     use ct <- result.try(required(tom.as_table(toml)))
-    use png_opts <- result.try(png_toml.from_toml(ct))
+    use png_opts <- result.try(png_toml.from_toml(ct, base_dir:))
     Ok(Compression(name:, format: Png(options: png_opts)))
   }
   snag.context(compression, "in compression `" <> name <> "`")

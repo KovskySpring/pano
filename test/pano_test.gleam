@@ -1,6 +1,6 @@
 import birdie
 import gleam/list
-import gleam/option.{Some}
+import gleam/option.{None, Some}
 import gleeunit
 import optimizer/spec as optimizer_spec
 import optimizer/vips/png/options as png_options
@@ -218,7 +218,7 @@ pub fn config_parses_compression_test() {
             q: Some(90),
             dither: Some(0.4),
             compression: Some(9),
-            keep: Some(png_options.KeepNone),
+            keep: Some([png_options.KeepNone]),
           ),
         ),
       ),
@@ -227,7 +227,7 @@ pub fn config_parses_compression_test() {
         format: optimizer_spec.Png(
           options: png_options.PngOptions(
             ..png_options.none(),
-            filter: Some(png_options.FilterAll),
+            filter: Some([png_options.FilterAll]),
             q: Some(100),
             dither: Some(1.0),
             compression: Some(6),
@@ -273,4 +273,213 @@ pub fn shipped_config_test() {
   assert germany.source_dir
     == "test/../../assets/original/images/cities/germany"
   assert list.length(germany.variants) == 3
+}
+
+pub fn vips_string_joins_flag_sets_test() {
+  let opts =
+    png_options.PngOptions(
+      ..png_options.none(),
+      filter: Some([png_options.FilterSub, png_options.FilterUp]),
+      keep: Some([png_options.KeepExif, png_options.KeepIcc]),
+    )
+
+  assert png_options.to_vips_string(opts) == "filter=sub:up,keep=exif:icc"
+}
+
+pub fn vips_string_omits_empty_flag_sets_test() {
+  let opts =
+    png_options.PngOptions(
+      ..png_options.none(),
+      filter: Some([]),
+      keep: Some([]),
+      compression: Some(9),
+    )
+
+  assert png_options.to_vips_string(opts) == "compression=9"
+}
+
+pub fn vips_string_round_trips_every_flag_name_test() {
+  let filters =
+    list.map(png_options.filter_names, fn(name) {
+      let assert Ok(flag) = png_options.filter_from_name(name)
+      flag
+    })
+  let keeps =
+    list.map(png_options.keep_names, fn(name) {
+      let assert Ok(flag) = png_options.keep_from_name(name)
+      flag
+    })
+
+  let opts =
+    png_options.PngOptions(
+      ..png_options.none(),
+      filter: Some(filters),
+      keep: Some(keeps),
+    )
+
+  assert png_options.to_vips_string(opts)
+    == "filter=none:sub:up:avg:paeth:all,keep=none:exif:xmp:iptc:icc:other:gainmap:all"
+}
+
+const every_option_config = "
+jar = \"c\"
+
+[[atlases]]
+name = \"x\"
+source_dir = \"x\"
+target_dir = \"o\"
+
+[atlases.variants.1x]
+factor = 1.0
+
+[atlases.variants.1x.compression.full]
+depth = 16
+quality = 80
+dither = 0.5
+compression = 3
+interlace = true
+palette = false
+effort = 4
+filter = [\"sub\", \"paeth\"]
+keep = [\"exif\", \"icc\"]
+background = [255, 128, 0.5]
+page_height = 64
+profile = \"srgb\"
+"
+
+pub fn config_parses_every_vips_option_test() {
+  let assert Ok(parsed) = config.parse(every_option_config, base_dir: "")
+  let assert [atlas] = parsed.atlases
+  let assert [variant] = atlas.variants
+  let assert [compression] = variant.compression
+  let optimizer_spec.Png(options: opts) = compression.format
+
+  assert opts.bitdepth == Some(16)
+  assert opts.q == Some(80)
+  assert opts.dither == Some(0.5)
+  assert opts.compression == Some(3)
+  assert opts.interlace == Some(True)
+  assert opts.palette == Some(False)
+  assert opts.effort == Some(4)
+  assert opts.filter == Some([png_options.FilterSub, png_options.FilterPaeth])
+  assert opts.keep == Some([png_options.KeepExif, png_options.KeepIcc])
+  assert opts.background == Some([255.0, 128.0, 0.5])
+  assert opts.page_height == Some(64)
+  assert opts.profile == Some("srgb")
+}
+
+pub fn every_option_vips_string_snapshot_test() {
+  let assert Ok(parsed) = config.parse(every_option_config, base_dir: "")
+  let assert [atlas] = parsed.atlases
+  let assert [variant] = atlas.variants
+  let assert [compression] = variant.compression
+  let optimizer_spec.Png(options: opts) = compression.format
+
+  png_options.to_vips_string(opts)
+  |> birdie.snap("every vips png option encoded as a bracket string")
+}
+
+/// An explicit `palette`/`filter` overrides what `depth` would imply.
+pub fn compression_derives_palette_from_depth_test() {
+  let derived =
+    "
+jar = \"c\"
+
+[[atlases]]
+name = \"x\"
+source_dir = \"x\"
+target_dir = \"o\"
+
+[atlases.variants.1x]
+factor = 1.0
+
+[atlases.variants.1x.compression.low]
+depth = 8
+
+[atlases.variants.1x.compression.high]
+depth = 16
+"
+  let assert Ok(parsed) = config.parse(derived, base_dir: "")
+  let assert [atlas] = parsed.atlases
+  let assert [variant] = atlas.variants
+  let assert [high, low] = variant.compression
+
+  let optimizer_spec.Png(options: low_opts) = low.format
+  assert low_opts.palette == Some(True)
+  assert low_opts.filter == None
+
+  let optimizer_spec.Png(options: high_opts) = high.format
+  assert high_opts.palette == None
+  assert high_opts.filter == Some([png_options.FilterAll])
+}
+
+pub fn compression_rejects_strip_and_keep_together_test() {
+  let bad =
+    "
+jar = \"c\"
+
+[[atlases]]
+name = \"x\"
+source_dir = \"x\"
+target_dir = \"o\"
+
+[atlases.variants.1x]
+factor = 1.0
+
+[atlases.variants.1x.compression.x]
+strip = true
+keep = [\"exif\"]
+"
+  let assert Error(_) = config.parse(bad, base_dir: "")
+}
+
+pub fn compression_rejects_unknown_flag_name_test() {
+  let bad =
+    "
+jar = \"c\"
+
+[[atlases]]
+name = \"x\"
+source_dir = \"x\"
+target_dir = \"o\"
+
+[atlases.variants.1x]
+factor = 1.0
+
+[atlases.variants.1x.compression.x]
+keep = [\"exif\", \"bogus\"]
+"
+  let assert Error(_) = config.parse(bad, base_dir: "")
+}
+
+/// A `profile` path resolves against the config's directory, a built-in name
+/// does not.
+pub fn compression_resolves_profile_path_test() {
+  let cfg = fn(profile) { "
+jar = \"c\"
+
+[[atlases]]
+name = \"x\"
+source_dir = \"x\"
+target_dir = \"o\"
+
+[atlases.variants.1x]
+factor = 1.0
+
+[atlases.variants.1x.compression.x]
+profile = \"" <> profile <> "\"
+" }
+
+  let profile_of = fn(text) {
+    let assert Ok(parsed) = config.parse(text, base_dir: "cfgdir")
+    let assert [atlas] = parsed.atlases
+    let assert [variant] = atlas.variants
+    let assert [compression] = variant.compression
+    let optimizer_spec.Png(options: opts) = compression.format
+    opts.profile
+  }
+
+  assert profile_of(cfg("profiles/custom.icc"))
+    == Some("cfgdir/profiles/custom.icc")
+  assert profile_of(cfg("srgb")) == Some("srgb")
 }

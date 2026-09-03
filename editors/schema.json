@@ -1,0 +1,282 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "packs.toml",
+  "description": "Texture packing config for `pano`, read from `packs.toml` in the current directory or from the path given to `--config`. Relative paths resolve against this file's directory. Unknown keys are ignored, matching the loader. See src/packer/config.gleam for the loader.",
+  "type": "object",
+  "required": ["jar", "atlases"],
+  "properties": {
+    "jar": {
+      "type": "string",
+      "description": "Path to the libGDX runnable TexturePacker jar. Relative paths resolve against this file's directory."
+    },
+    "vips": {
+      "type": "string",
+      "default": "vips",
+      "description": "`vips` executable: a bare name is looked up on PATH, a path containing `/` resolves against this file's directory."
+    },
+    "concurrency": {
+      "type": "integer",
+      "default": 8,
+      "description": "Number of atlas pack jobs to run concurrently. Values below 1 are clamped to 1. Overridable via the GDX_CONCURRENCY environment variable."
+    },
+    "atlases": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The atlas registry. Must have at least one entry.",
+      "items": { "$ref": "#/definitions/atlas" }
+    }
+  },
+  "definitions": {
+    "atlas": {
+      "type": "object",
+      "required": ["name", "source_dir", "target_dir"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Atlas name, used as the output filename stem."
+        },
+        "source_dir": {
+          "type": "string",
+          "description": "Source image directory for this atlas. Relative paths resolve against this file's directory."
+        },
+        "target_dir": {
+          "type": "string",
+          "description": "Output root for this atlas. Relative paths resolve against this file's directory. Overridable for every atlas at once via the GDX_OUT_ROOT environment variable."
+        },
+        "variants": {
+          "type": "object",
+          "default": {},
+          "description": "Named scale passes. Absent/empty means pack once at factor 1.0, writing directly into `target_dir`. Otherwise each variant writes to `<target_dir>/<variant name>/`.",
+          "additionalProperties": { "$ref": "#/definitions/variant" }
+        },
+        "pot": {
+          "type": "boolean",
+          "default": false,
+          "description": "libGDX TexturePacker setting: pad output pages to power-of-two dimensions."
+        },
+        "padding_x": {
+          "type": "integer",
+          "default": 2,
+          "description": "libGDX TexturePacker setting: horizontal padding between packed images, in pixels."
+        },
+        "padding_y": {
+          "type": "integer",
+          "default": 2,
+          "description": "libGDX TexturePacker setting: vertical padding between packed images, in pixels."
+        },
+        "edge_padding": {
+          "type": "boolean",
+          "default": true,
+          "description": "libGDX TexturePacker setting: apply padding to the edges of the packed page."
+        },
+        "duplicate_padding": {
+          "type": "boolean",
+          "default": true,
+          "description": "libGDX TexturePacker setting: fill padding by duplicating the edge pixels of each image."
+        },
+        "rotation": {
+          "type": "boolean",
+          "default": false,
+          "description": "libGDX TexturePacker setting: allow rotating images 90 degrees to improve packing."
+        },
+        "strip_whitespace_x": {
+          "type": "boolean",
+          "default": true,
+          "description": "libGDX TexturePacker setting: strip transparent horizontal whitespace from source images before packing."
+        },
+        "strip_whitespace_y": {
+          "type": "boolean",
+          "default": true,
+          "description": "libGDX TexturePacker setting: strip transparent vertical whitespace from source images before packing."
+        },
+        "alpha_threshold": {
+          "type": "integer",
+          "default": 0,
+          "description": "libGDX TexturePacker setting: alpha value below which a pixel is considered transparent for whitespace stripping."
+        },
+        "filter_min": {
+          "type": "string",
+          "default": "Linear",
+          "description": "libGDX TexturePacker setting: minification texture filter, e.g. `Nearest`, `Linear`, `MipMapLinearLinear`. Forwarded verbatim, not validated.",
+          "examples": [
+            "Nearest",
+            "Linear",
+            "MipMap",
+            "MipMapNearestNearest",
+            "MipMapLinearNearest",
+            "MipMapNearestLinear",
+            "MipMapLinearLinear"
+          ]
+        },
+        "filter_mag": {
+          "type": "string",
+          "default": "Linear",
+          "description": "libGDX TexturePacker setting: magnification texture filter, e.g. `Nearest`, `Linear`. Forwarded verbatim, not validated.",
+          "examples": ["Nearest", "Linear"]
+        },
+        "format": {
+          "type": "string",
+          "default": "RGBA8888",
+          "description": "libGDX TexturePacker setting: pixel format of the packed page. Forwarded verbatim, not validated.",
+          "examples": [
+            "RGBA8888",
+            "RGBA4444",
+            "RGB888",
+            "RGB565",
+            "Alpha",
+            "Intensity",
+            "LuminanceAlpha"
+          ]
+        },
+        "max_width": {
+          "type": "integer",
+          "default": 2048,
+          "description": "libGDX TexturePacker setting: maximum width of a packed page, in pixels."
+        },
+        "max_height": {
+          "type": "integer",
+          "default": 2048,
+          "description": "libGDX TexturePacker setting: maximum height of a packed page, in pixels."
+        },
+        "combine_subdirectories": {
+          "type": "boolean",
+          "default": true,
+          "description": "libGDX TexturePacker setting: combine images from subdirectories of `source_dir` into the parent atlas."
+        },
+        "flatten_paths": {
+          "type": "boolean",
+          "default": false,
+          "description": "libGDX TexturePacker setting: use only the image filename, discarding its subdirectory path, as the packed region name."
+        },
+        "use_indexes": {
+          "type": "boolean",
+          "default": false,
+          "description": "libGDX TexturePacker setting: use `_<index>` filename suffixes to indicate animation frame indices."
+        },
+        "bleed": {
+          "type": "boolean",
+          "default": true,
+          "description": "libGDX TexturePacker setting: bleed transparent pixel colors into the padding to avoid dark edges from filtering."
+        },
+        "scale_resampling": {
+          "type": "string",
+          "default": "bicubic",
+          "description": "libGDX TexturePacker setting: resampling filter used when downscaling for a variant's factor. Forwarded verbatim, not validated.",
+          "examples": ["nearest", "bilinear", "bicubic"]
+        }
+      }
+    },
+    "variant": {
+      "type": "object",
+      "required": ["factor"],
+      "properties": {
+        "factor": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Downscale factor forwarded to libGDX TexturePacker for this variant's pass, e.g. `0.5` for a half-size output. Accepted as an int or float TOML literal; the loader rejects only non-finite values."
+        },
+        "compression": {
+          "type": "object",
+          "default": {},
+          "description": "Named re-encoding outputs for this variant. Absent/empty skips re-encoding. Each entry writes to `<target_dir>/<variant name>/<compression name>/`.",
+          "additionalProperties": { "$ref": "#/definitions/compression" }
+        }
+      }
+    },
+    "compression": {
+      "type": "object",
+      "description": "Options for one `vips pngsave` invocation. Every vips PNG option is available here. Out-of-range numbers are clamped by vips rather than rejected, so the bounds below mark values that would be silently altered; `depth` is the exception and fails outright. Keys absent from the file are left out of the vips call entirely, so vips applies its own default.",
+      "not": { "required": ["strip", "keep"] },
+      "properties": {
+        "depth": {
+          "type": "integer",
+          "enum": [1, 2, 4, 8, 16],
+          "description": "Output bit depth, vips `bitdepth`. vips accepts only 1, 2, 4, 8 or 16 and errors on any other value. A depth of 8 or less selects palette quantisation (libimagequant); a larger one uses every row filter instead, to maximise zlib compression. Set `palette` or `filter` explicitly to override that choice. vips default 8."
+        },
+        "quality": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 100,
+          "description": "Quantisation quality, vips `Q`, 0 to 100. Always sent, but only meaningful when palette quantisation is active. vips default 100."
+        },
+        "dither": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 1.0,
+          "description": "Dithering strength for palette quantisation, vips `dither`, 0 to 1. Accepted as an int or float TOML literal. vips default 1.0."
+        },
+        "compression": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9,
+          "default": 9,
+          "description": "zlib compression level, vips `compression`, 0 to 9. Higher is smaller and slower. vips default 6."
+        },
+        "strip": {
+          "type": "boolean",
+          "default": true,
+          "description": "Shorthand for the common metadata case: `true` sends `keep = [\"none\"]`, `false` omits the option so vips keeps everything. Cannot be combined with `keep`, which sets the same vips option."
+        },
+        "keep": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "none",
+              "exif",
+              "xmp",
+              "iptc",
+              "icc",
+              "other",
+              "gainmap",
+              "all"
+            ]
+          },
+          "description": "Which metadata blocks to retain, vips `keep`. A set of flags, joined with `:` on the way to vips, e.g. `[\"exif\", \"icc\"]`. `none` and `all` are absorbing. Cannot be combined with `strip`. vips keeps every block by default."
+        },
+        "interlace": {
+          "type": "boolean",
+          "description": "Write an interlaced (Adam7) PNG, vips `interlace`. Requires the full image in memory. vips default `false`."
+        },
+        "filter": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["none", "sub", "up", "avg", "paeth", "all"]
+          },
+          "description": "libpng row filters applied before compression, vips `filter`. A set of flags, joined with `:` on the way to vips, e.g. `[\"sub\", \"up\"]`. `none` is absorbing. Defaults to `[\"all\"]` unless `depth` selects palette quantisation; an empty array omits the option. vips default `none`."
+        },
+        "palette": {
+          "type": "boolean",
+          "description": "Quantise to a palette (indexed) PNG via libimagequant, vips `palette`. Defaults to on when `depth` is 8 or less; set it here to override. vips default `false`."
+        },
+        "effort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "CPU effort for palette quantisation, vips `effort`, 1 to 10. Higher is better quality and slower. vips default 7."
+        },
+        "background": {
+          "type": "array",
+          "items": { "type": "number" },
+          "description": "Background colour used when flattening alpha, vips `background`. RGB or RGBA components, e.g. `[255, 255, 255]`. Ints and floats both work."
+        },
+        "page_height": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000000,
+          "description": "Page height for a multi-page save, in pixels, vips `page-height`. vips default 0."
+        },
+        "profile": {
+          "type": "string",
+          "examples": ["srgb", "p3", "cmyk"],
+          "description": "ICC profile to embed, vips `profile`. Either a built-in name (`srgb`, `p3`, `cmyk`) or a path to a profile file, which resolves against this file's directory. A bare name is passed through so the built-in lookup keeps working."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,5 @@
+---
+version: 2.0.2
+title: every vips png option encoded as a bracket string
+---
+compression=3,interlace=true,filter=sub:paeth,palette=false,Q=80,dither=0.5,bitdepth=16,effort=4,keep=exif:icc,background=255.0 128.0 0.5,page-height=64,profile=srgb
