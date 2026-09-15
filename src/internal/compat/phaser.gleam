@@ -1,12 +1,13 @@
 //// Encoder for the Phaser 3 multipack JSON format consumed by
-//// `load.multiatlas` (the `textures[]` / `frames[]`
+//// `load.multiatlas`: a `textures[]` array of pages, each with its own
+//// `frames[]` array of regions.
 
 import gleam/float
 import gleam/int
 import gleam/json.{type Json}
-import packer/gdx_atlas.{type Frame, type Page}
+import internal/compat/gdx.{type Frame, type Page}
 
-pub const meta_app = "https://github.com/libgdx/libgdx (runnable-texturepacker)"
+pub const meta_app = "https://github.com/libgdx/libgdx (standalone texture packer)"
 
 /// Encode pages, each paired with its final output image filename, as a
 /// Phaser multiatlas JSON string. `scale` is the downscale factor this pack

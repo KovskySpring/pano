@@ -1,14 +1,13 @@
 # pano - Phaser Pack N' Optimize
 
 Multi-threaded texture packer for Phaser 3,
-using libGDX's TexturePacker and `libvips` under the hood.
+using libGDX's TexturePacker under the hood.
 
 ## Prerequisites
 
 - Erlang/OTP 27+ (for running the `pano` escript). Checked at startup; older releases are rejected.
 - A JVM (Java 8+) on `PATH` as `java` (for libGDX's TexturePacker). Checked before packing.
 - `runnable-texturepacker.jar` (for libGDX's TexturePacker). See [libGDX's TexturePacker](https://libgdx.com/wiki/tools/texture-packer).
-- libvips 8.15+ CLI on `PATH` as `vips` (for PNG compression, `keep=` option requires 8.15+). Checked before packing, but only if any `[compression]` table is configured.
 
 ## Installation
 
@@ -28,15 +27,11 @@ All configuration lives in a `packs.toml` file.
 # pack every atlas in ./packs.toml
 pano
 # explicit config location
-pano --config path/to/packs.toml
+pano --config=path/to/packs.toml
 ```
 
 Because `pano` uses libGDX's TexturePacker standalone jar,
 you must have it installed and referenced in your `packs.toml` file.
-libGDX's TexturePacker reads environment overrides:
-`GDX_OUT_ROOT` to replace every atlas's `target_dir` and
-`GDX_CONCURRENCY` to replaces `concurrency`. `pano` respects
-these overrides but it is recommended to set them in your `packs.toml` file instead.
 
 ## Development
 
@@ -45,26 +40,28 @@ See [mise.toml](mise.toml) for the development configuration.
 
 You can run it with `gleam run` or build it with `gleam build`.
 
-Testing is done with `birdie`, run `gleam test` to run the tests.
+Tests use `gleeunit`, with `birdie` for the JSON snapshots. Run `gleam test`.
+Review a changed snapshot with `gleam run -m birdie`.
 
 ## packs.toml
 
 All configuration lives in a single `packs.toml` file.
-Relative paths in the file always resolve against the directory that contains it.
+Relative paths in the file always resolve against the directory that contains it,
+and may not climb above it — `../` is rejected when there is no parent segment left
+to consume.
 
 ### Editor intellisense
 
-[`./editors/schema.json`](schema.json) documents the full shape of `packs.toml` and can be
+[`./editors/schema.json`](editors/schema.json) documents the full shape of `packs.toml` and can be
 wired up to editors that support JSON Schema for TOML for autocomplete, inline docs,
 and validation.
 
 ### Top-level keys
 
-| Key           | Type   | Required | Default  | Description                                                                                                               |
-| ------------- | ------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `jar`         | string | ✓        | -        | Path to the runnable `texturepacker.jar`.                                                                                 |
-| `vips`        | string |          | `"vips"` | The `vips` executable. A bare name is looked up on `PATH`; a value containing `/` resolves against this file's directory. |
-| `concurrency` | int    |          | `8`      | Maximum number of atlases packed in parallel. Values below 1 are clamped to 1.                                            |
+| Key           | Type   | Required | Default | Description                                                                |
+| ------------- | ------ | -------- | ------- | -------------------------------------------------------------------------- |
+| `jar`         | string | ✓        | -       | Path to the runnable `texturepacker.jar`.                                  |
+| `concurrency` | int    |          | `8`     | Maximum number of pack jobs run in parallel. Values below 1 are clamped to 1. |
 
 ### `[[atlases]]`
 
@@ -76,32 +73,53 @@ Each entry in the `[[atlases]]` array defines one atlas to pack.
 | `source_dir` | string | ✓        | -       | Directory containing the source images to pack.                                         |
 | `target_dir` | string | ✓        | -       | Root output directory for this atlas.                                                   |
 
-#### libGDX TexturePacker settings
+### `[atlases.gdx_settings]`
 
-All of the following keys are optional and sit directly inside an `[[atlases]]` entry.
-They map to libGDX TexturePacker settings and are forwarded verbatim to the packer.
+Every key in this table is optional and maps to a libGDX TexturePacker setting,
+forwarded verbatim to the packer. Omit the table entirely to pack with the defaults
+below; include it to override only the keys you list.
 
-| Key                      | Type   | Default      | Description                                                                    |
-| ------------------------ | ------ | ------------ | ------------------------------------------------------------------------------ |
-| `pot`                    | bool   | `false`      | Force power-of-two page dimensions.                                            |
-| `padding_x`              | int    | `2`          | Pixels of padding added to the left and right of each sprite.                  |
-| `padding_y`              | int    | `2`          | Pixels of padding added to the top and bottom of each sprite.                  |
-| `edge_padding`           | bool   | `true`       | Add padding around the edges of each page.                                     |
-| `duplicate_padding`      | bool   | `true`       | Duplicate pixels into the padding region to reduce texture bleeding.           |
-| `rotation`               | bool   | `false`      | Allow sprites to be rotated 90° to improve packing.                            |
-| `strip_whitespace_x`     | bool   | `true`       | Strip transparent pixels from the left and right sides of sprites.             |
-| `strip_whitespace_y`     | bool   | `true`       | Strip transparent pixels from the top and bottom sides of sprites.             |
-| `alpha_threshold`        | int    | `0`          | Pixels with alpha ≤ this value are treated as fully transparent.               |
-| `filter_min`             | string | `"Linear"`   | Minification filter (`Linear`, `Nearest`, …).                                  |
-| `filter_mag`             | string | `"Linear"`   | Magnification filter (`Linear`, `Nearest`, …).                                 |
-| `format`                 | string | `"RGBA8888"` | Pixel format passed to the packer (e.g. `RGBA8888`, `RGB888`).                 |
-| `max_width`              | int    | `2048`       | Maximum page width in pixels.                                                  |
-| `max_height`             | int    | `2048`       | Maximum page height in pixels.                                                 |
-| `combine_subdirectories` | bool   | `true`       | Treat all subdirectories of `source_dir` as part of the same atlas.            |
-| `flatten_paths`          | bool   | `false`      | Strip directory prefixes from sprite names in the atlas.                       |
-| `use_indexes`            | bool   | `false`      | Append a numeric index to sprite names for animation frames.                   |
-| `bleed`                  | bool   | `true`       | Extend the border pixels of sprites into the padding to avoid colour fringing. |
-| `scale_resampling`       | string | `"bicubic"`  | Resampling algorithm used when downscaling (`bicubic`, `bilinear`, `nearest`). |
+| Key                      | Type   | Default         | Description                                                                      |
+| ------------------------ | ------ | --------------- | -------------------------------------------------------------------------------- |
+| `pot`                    | bool   | `false`         | Force power-of-two page dimensions.                                              |
+| `multiple_of_four`       | bool   | `false`         | Force page dimensions to a multiple of four (needed by some compressed formats). |
+| `padding_x`              | int    | `2`             | Pixels of padding added to the left and right of each sprite.                    |
+| `padding_y`              | int    | `2`             | Pixels of padding added to the top and bottom of each sprite.                    |
+| `edge_padding`           | bool   | `true`          | Add padding around the edges of each page.                                       |
+| `duplicate_padding`      | bool   | `true`          | Duplicate pixels into the padding region to reduce texture bleeding.             |
+| `rotation`               | bool   | `false`         | Allow sprites to be rotated 90° to improve packing.                              |
+| `min_width`              | int    | `16`            | Minimum page width in pixels.                                                    |
+| `min_height`             | int    | `16`            | Minimum page height in pixels.                                                   |
+| `max_width`              | int    | `2048`          | Maximum page width in pixels.                                                    |
+| `max_height`             | int    | `2048`          | Maximum page height in pixels.                                                   |
+| `square`                 | bool   | `false`         | Force every page to be square.                                                   |
+| `strip_whitespace_x`     | bool   | `true`          | Strip transparent pixels from the left and right sides of sprites.               |
+| `strip_whitespace_y`     | bool   | `true`          | Strip transparent pixels from the top and bottom sides of sprites.               |
+| `alpha_threshold`        | int    | `0`             | Pixels with alpha ≤ this value are treated as fully transparent.                 |
+| `filter_min`             | string | `"Linear"`      | Minification filter (`Linear`, `Nearest`, …).                                    |
+| `filter_mag`             | string | `"Linear"`      | Magnification filter (`Linear`, `Nearest`, …).                                   |
+| `wrap_x`                 | string | `"ClampToEdge"` | Horizontal wrap mode written to the atlas (`ClampToEdge`, `Repeat`, …).          |
+| `wrap_y`                 | string | `"ClampToEdge"` | Vertical wrap mode written to the atlas (`ClampToEdge`, `Repeat`, …).            |
+| `format`                 | string | `"RGBA8888"`    | Pixel format passed to the packer (e.g. `RGBA8888`, `RGB888`).                   |
+| `alias`                  | bool   | `true`          | Pack pixel-identical images once; duplicates become aliases of the same region.  |
+| `ignore_blank_images`    | bool   | `true`          | Skip fully transparent source images instead of adding an empty region.          |
+| `fast`                   | bool   | `false`         | Pack much faster with less efficient page layouts.                               |
+| `debug`                  | bool   | `false`         | Draw the bounds of every packed sprite onto the pages.                           |
+| `silent`                 | bool   | `false`         | Suppress the packer's own progress output.                                       |
+| `combine_subdirectories` | bool   | `true`          | Treat all subdirectories of `source_dir` as part of the same atlas.              |
+| `flatten_paths`          | bool   | `false`         | Strip directory prefixes from sprite names in the atlas.                         |
+| `premultiply_alpha`      | bool   | `false`         | Multiply RGB by alpha in the output pages.                                       |
+| `use_indexes`            | bool   | `false`         | Append a numeric index to sprite names for animation frames.                     |
+| `bleed`                  | bool   | `true`          | Extend the border pixels of sprites into the padding to avoid colour fringing.   |
+| `bleed_iterations`       | int    | `2`             | Bleed passes; raise to 4 or 8 if downscaled sprites show dark fringes.           |
+| `limit_memory`           | bool   | `true`          | Keep one source image in memory at a time (reads each twice).                    |
+| `grid`                   | bool   | `false`         | Place sprites in a uniform grid, in order, instead of bin packing.               |
+| `scale_resampling`       | string | `"bicubic"`     | Resampling algorithm used when downscaling (`bicubic`, `bilinear`, `nearest`).   |
+
+Not exposed, because pano's pipeline depends on them: `scale`/`scaleSuffix` (driven by
+`[atlases.variants]`), `outputFormat`/`jpegQuality` (pages are PNG end to end),
+`atlasExtension`/`legacyOutput`/`prettyPrint` (the `.atlas` parser reads the legacy format)
+and `ignore` (skips the whole source directory when set at the root).
 
 ### `[atlases.variants.<name>]`
 
@@ -115,42 +133,6 @@ The `<name>` key is arbitrary and becomes the subdirectory name (e.g. `1x`, `2x`
 | -------- | ----- | -------- | ----------------------------------------------------------------------------------- |
 | `factor` | float | ✓        | Scale factor applied to the source images for this pass (e.g. `0.5` for half-size). |
 
-### `[atlases.variants.<name>.compression.<name>]`
-
-Each compression entry re-encodes the variant's output pages with `libvips`.
-The `<name>` key is arbitrary and becomes a subdirectory under the variant's output (`<target_dir>/<variant>/<compression>/`).
-When no compression entries are declared the variant's raw packer output is kept as-is.
-
-Every option `vips pngsave` accepts is available here, so you should not need to go
-looking through the vips docs. Each key names the vips option it maps to; the four
-with a pano default are always sent, and any key you leave out is omitted from the
-vips call entirely, leaving vips its own default.
-
-| Key           | Type     | vips option   | pano default | vips default | Description                                                                                                                   |
-| ------------- | -------- | ------------- | ------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `depth`       | int      | `bitdepth`    | -            | `8`          | Bit depth, one of `1`, `2`, `4`, `8`, `16`. `≤ 8` selects palette quantisation (libimagequant), larger uses every row filter. |
-| `quality`     | int      | `Q`           | `100`        | `100`        | Quantisation quality, 0–100. Always sent, but only meaningful when palette quantisation is active.                            |
-| `dither`      | float    | `dither`      | `1.0`        | `1.0`        | Dithering strength for palette quantisation, 0.0–1.0.                                                                         |
-| `compression` | int      | `compression` | `9`          | `6`          | zlib compression level, 0–9. Higher is smaller and slower.                                                                    |
-| `strip`       | bool     | `keep`        | `true`       | -            | Shorthand: `true` sends `keep = ["none"]`, `false` keeps everything. Cannot be combined with `keep`.                          |
-| `keep`        | string[] | `keep`        | -            | all blocks   | Metadata blocks to retain: `none`, `exif`, `xmp`, `iptc`, `icc`, `other`, `gainmap`, `all`. Cannot be combined with `strip`.  |
-| `filter`      | string[] | `filter`      | see note     | `none`       | Row filters: `none`, `sub`, `up`, `avg`, `paeth`, `all`. Defaults to `["all"]` unless `depth` selects palette quantisation.   |
-| `palette`     | bool     | `palette`     | see note     | `false`      | Quantise to a palette (indexed) PNG. Defaults to on when `depth ≤ 8`; set it to override.                                     |
-| `effort`      | int      | `effort`      | -            | `7`          | CPU effort for palette quantisation, 1–10. Higher is better quality and slower.                                               |
-| `interlace`   | bool     | `interlace`   | -            | `false`      | Write an interlaced (Adam7) PNG. Requires the full image in memory.                                                           |
-| `background`  | number[] | `background`  | -            | -            | Background colour used when flattening alpha, e.g. `[255, 255, 255]`.                                                         |
-| `page_height` | int      | `page-height` | -            | `0`          | Page height for a multi-page save, in pixels.                                                                                 |
-| `profile`     | string   | `profile`     | -            | -            | ICC profile to embed: a built-in name (`srgb`, `p3`, `cmyk`) or a path, resolved against the config's directory.              |
-
-`keep` and `filter` are flag _sets_ - pass an array and pano joins it with `:` for vips
-(`keep = ["exif", "icc"]` becomes `keep=exif:icc`). For both, `none` is absorbing, as is
-`all` for `keep`. An empty array omits the option.
-
-Two things to know about ranges. vips **clamps** out-of-range numbers instead of
-rejecting them, so `quality = 101` silently becomes `100` - the bounds above are worth
-respecting even though nothing errors. `depth` is the exception: vips accepts only
-`1`, `2`, `4`, `8` or `16` and fails on anything else.
-
 ### Annotated example
 
 ```toml
@@ -162,7 +144,8 @@ name       = "ui-resources"
 source_dir = "assets/images/ui"
 target_dir = "assets/textures"
 
-# libGDX settings override (all optional)
+# libGDX settings override (the whole table is optional, as is every key in it)
+[atlases.gdx_settings]
 max_width  = 4096
 max_height = 4096
 rotation   = true
@@ -170,25 +153,8 @@ rotation   = true
 [atlases.variants.1x]
 factor = 0.5
 
-[atlases.variants.1x.compression.8bit]
-# depth ≤ 8 → palette quantisation via libimagequant
-depth       = 8
-quality     = 85
-dither      = 0.8
-compression = 9
-effort      = 10          # only meaningful while quantising
-strip       = true
-
-[atlases.variants.1x.compression.archival]
-# full colour, keeping the colour profile and choosing filters by hand
-depth   = 16
-filter  = ["sub", "paeth"]
-keep    = ["icc"]
-profile = "srgb"
-
 [atlases.variants.2x]
 factor = 1.0
-# no compression block → keep the packer's raw output
 ```
 
 Output layout for the example above:
@@ -196,22 +162,15 @@ Output layout for the example above:
 ```
 assets/textures/
   1x/
-    ui-resources-0.png          # raw packer output
-    8bit/
-      ui-resources-0.png        # palette-quantised copy
-    archival/
-      ui-resources-0.png        # 16-bit copy with an embedded profile
+    ui-resources-0.png          # half-size pages
+    ui-resources.json           # Phaser multiatlas descriptor
   2x/
-    ui-resources-0.png          # raw packer output
-  ui-resources.json             # Phaser multiatlas descriptor
+    ui-resources-0.png          # full-size pages
+    ui-resources.json
 ```
 
-### Environment overrides
-
-| Variable          | Overrides                                   |
-| ----------------- | ------------------------------------------- |
-| `GDX_OUT_ROOT`    | Replaces `target_dir` for every atlas.      |
-| `GDX_CONCURRENCY` | Replaces the top-level `concurrency` value. |
+Drop the `[atlases.variants.*]` tables and the atlas is packed once at factor `1.0`,
+writing `ui-resources-0.png` and `ui-resources.json` straight into `assets/textures/`.
 
 ## License
 

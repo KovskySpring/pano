@@ -1,19 +1,18 @@
-//// CLI for the GDX texture build - a drop-in replacement for the packing
-//// half of the old `management/textures/build.ts` + `gdxPack.ts`.
+//// CLI for the GDX texture build.
 ////
-//// All configuration (paths, concurrency, scales, and the atlas registry)
-//// comes from a `packs.toml` file, found in the current directory by default
-//// or given via `--config`:
+//// All configuration (paths, concurrency, scales, libGDX settings, and the
+//// atlas registry) comes from a `packs.toml` file, found in the current
+//// directory by default or given via `--config`:
 ////
 ////   gleam run                              # pack every atlas in ./packs.toml
 ////   gleam run -- --config=path/packs.toml  # explicit config location
 
 import argv
+import config
 import gleam/io
 import gleam/result
 import glint
-import packer/config
-import packer/pack
+import pack
 import shellout
 import snag
 
@@ -23,7 +22,7 @@ const flag_config = "config"
 
 const default_config_filename = "packs.toml"
 
-const message_about = "Multi-threaded texture packer for Phaser 3, using libGDX's TexturePacker and libvips under the hood."
+const message_about = "Multi-threaded texture packer for Phaser 3, using libGDX's TexturePacker under the hood."
 
 const message_help_config = "Path to the packs.toml config (default: packs.toml in the current directory)"
 
@@ -35,10 +34,16 @@ pub fn main() {
   |> glint.run(argv.load().arguments)
 }
 
+fn load_config(path: String) -> snag.Result(config.Config) {
+  config.load_config(path)
+  |> result.map_error(config.describe_parse_error)
+  |> result.map_error(snag.new)
+}
+
 fn pack_command() -> glint.Command(Nil) {
   use <- glint.command_help(message_about)
 
-  use config_flag <- glint.flag(
+  use parse_flag <- glint.flag(
     glint.string_flag(flag_config)
     |> glint.flag_default(default_config_filename)
     |> glint.flag_help(message_help_config),
@@ -47,9 +52,10 @@ fn pack_command() -> glint.Command(Nil) {
   use _, _, flags <- glint.command()
 
   let outcome =
-    config_flag(flags)
-    |> result.try(config.load)
-    |> result.map(pack.run)
+    flags
+    |> parse_flag
+    |> result.try(load_config)
+    |> result.try(pack.pack)
 
   case outcome {
     Ok(_) -> Nil

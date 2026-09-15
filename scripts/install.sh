@@ -26,12 +26,8 @@ if [ "$otp" -lt 27 ] 2>/dev/null; then
   die "Erlang/OTP 27 or newer is required, found OTP $otp"
 fi
 
-# libvips does the re-encoding and a JVM runs libGDX TexturePacker. Neither is
-# bundled; warn rather than fail, since `pano` checks both again at run time -
-# vips only if the config declares a `[compression]` table anywhere, java
-# unconditionally since every pack job needs the JVM.
-command -v vips >/dev/null 2>&1 \
-  || echo "install.sh: warning: no 'vips' on PATH; install libvips 8.15+ ('brew install vips', 'apt install libvips-tools')" >&2
+# A JVM runs libGDX TexturePacker. It is not bundled; warn rather than fail,
+# since `pano` checks for it again before every pack run.
 command -v java >/dev/null 2>&1 \
   || echo "install.sh: warning: no 'java' on PATH; pano needs a JVM (Java 8+) to run libGDX TexturePacker" >&2
 
