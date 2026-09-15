@@ -1,13 +1,14 @@
-# Texture packing config, consumed by `gleam run` in dev/pano.
-# Relative paths resolve against this file's directory.
+# Fixture for `shipped_config_test`: a realistic multi-atlas, multi-variant
+# config. Relative paths resolve against this file's directory, and must stay
+# within it (`..` may not climb above the config's own directory).
 
-jar = "../../management/textures/vendor/runnable-texturepacker.jar"
+jar = "../vendor/runnable-texturepacker.jar"
 concurrency = 8
 
 [[atlases]]
 name = "default-resources"
-source_dir = "../../assets/original/images/default"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/default"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -20,8 +21,8 @@ factor = 1.0
 
 [[atlases]]
 name = "effects-resources"
-source_dir = "../../assets/original/images/effects"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/effects"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -34,8 +35,8 @@ factor = 1.0
 
 [[atlases]]
 name = "gameplay-resources"
-source_dir = "../../assets/original/images/gameplay"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/gameplay"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -48,8 +49,8 @@ factor = 1.0
 
 [[atlases]]
 name = "gameplay-pwf-resources"
-source_dir = "../../assets/original/images/gameplay-pwf"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/gameplay-pwf"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -62,8 +63,8 @@ factor = 1.0
 
 [[atlases]]
 name = "social-resources"
-source_dir = "../../assets/original/images/social"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/social"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -76,8 +77,8 @@ factor = 1.0
 
 [[atlases]]
 name = "animation-resources"
-source_dir = "../../assets/original/images/animations"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/animations"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -92,8 +93,8 @@ factor = 1.0
 
 [[atlases]]
 name = "cities-resources-brazil"
-source_dir = "../../assets/original/images/cities/brazil"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/cities/brazil"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -106,8 +107,8 @@ factor = 1.0
 
 [[atlases]]
 name = "cities-resources-coming-soon"
-source_dir = "../../assets/original/images/cities/coming-soon"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/cities/coming-soon"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -120,8 +121,8 @@ factor = 1.0
 
 [[atlases]]
 name = "cities-resources-france"
-source_dir = "../../assets/original/images/cities/france"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/cities/france"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -134,8 +135,8 @@ factor = 1.0
 
 [[atlases]]
 name = "cities-resources-germany"
-source_dir = "../../assets/original/images/cities/germany"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/cities/germany"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -148,8 +149,8 @@ factor = 1.0
 
 [[atlases]]
 name = "cities-resources-italy"
-source_dir = "../../assets/original/images/cities/italy"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/cities/italy"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -162,8 +163,8 @@ factor = 1.0
 
 [[atlases]]
 name = "cities-resources-japan"
-source_dir = "../../assets/original/images/cities/japan"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/cities/japan"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -178,8 +179,8 @@ factor = 1.0
 
 [[atlases]]
 name = "tournament-theme-easter"
-source_dir = "../../assets/original/images/tournament-themes/easter"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/tournament-themes/easter"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -192,8 +193,8 @@ factor = 1.0
 
 [[atlases]]
 name = "tournament-theme-halloween"
-source_dir = "../../assets/original/images/tournament-themes/halloween"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/tournament-themes/halloween"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -206,8 +207,8 @@ factor = 1.0
 
 [[atlases]]
 name = "tournament-theme-new_year"
-source_dir = "../../assets/original/images/tournament-themes/new_year"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/tournament-themes/new_year"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -220,8 +221,8 @@ factor = 1.0
 
 [[atlases]]
 name = "tournament-theme-summer"
-source_dir = "../../assets/original/images/tournament-themes/summer"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/tournament-themes/summer"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -234,8 +235,8 @@ factor = 1.0
 
 [[atlases]]
 name = "tournament-theme-summer_alt_1"
-source_dir = "../../assets/original/images/tournament-themes/summer_alt_1"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/tournament-themes/summer_alt_1"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -248,8 +249,8 @@ factor = 1.0
 
 [[atlases]]
 name = "tournament-theme-valentine"
-source_dir = "../../assets/original/images/tournament-themes/valentine"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/tournament-themes/valentine"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472
@@ -262,8 +263,8 @@ factor = 1.0
 
 [[atlases]]
 name = "tournament-theme-winter"
-source_dir = "../../assets/original/images/tournament-themes/winter"
-target_dir = "../../assets/textures"
+source_dir = "../assets/original/images/tournament-themes/winter"
+target_dir = "../assets/textures"
 
 [atlases.variants.1x]
 factor = 0.3472

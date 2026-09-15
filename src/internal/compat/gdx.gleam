@@ -42,28 +42,6 @@ pub type Page {
   Page(image: String, format: String, size: #(Int, Int), frames: List(Frame))
 }
 
-pub fn parse(text: String) -> snag.Result(List(Page)) {
-  text
-  |> string.split("\n")
-  |> list.map(string.trim_end)
-  |> parse_pages([])
-}
-
-fn parse_pages(
-  lines: List(String),
-  pages: List(Page),
-) -> snag.Result(List(Page)) {
-  case lines {
-    [] -> Ok(list.reverse(pages))
-    ["", ..rest] -> parse_pages(rest, pages)
-    [image_line, ..rest] ->
-      case build_page(image_line, rest) {
-        Ok(#(page, rest)) -> parse_pages(rest, [page, ..pages])
-        Error(e) -> Error(e)
-      }
-  }
-}
-
 /// Consume page-level key/value lines, keeping `size` and `format`.
 fn parse_header(
   lines: List(String),
@@ -141,6 +119,28 @@ fn build_page(image_line: String, rest: List(String)) {
     ),
     rest,
   ))
+}
+
+fn parse_pages(
+  lines: List(String),
+  pages: List(Page),
+) -> snag.Result(List(Page)) {
+  case lines {
+    [] -> Ok(list.reverse(pages))
+    ["", ..rest] -> parse_pages(rest, pages)
+    [image_line, ..rest] ->
+      case build_page(image_line, rest) {
+        Ok(#(page, rest)) -> parse_pages(rest, [page, ..pages])
+        Error(e) -> Error(e)
+      }
+  }
+}
+
+pub fn parse_gdx(text: String) -> snag.Result(List(Page)) {
+  text
+  |> string.split("\n")
+  |> list.map(string.trim_end)
+  |> parse_pages([])
 }
 
 /// Consume the indented `key: value` lines belonging to one region.

@@ -48,4 +48,4 @@ jobs:
             curl -fsSL https://raw.githubusercontent.com/KovskySpring/pano/${{ github.ref_name }}/scripts/install.sh | sh
             ```
 
-            Requires Erlang/OTP 27+, libvips 8.15+ (`vips` on PATH), and a JVM.
+            Requires Erlang/OTP 27+ and a JVM (Java 8+).
