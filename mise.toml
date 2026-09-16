@@ -2,6 +2,7 @@
 gleam = "1.18.1"
 erlang = "29.0.5"
 rebar = { version = "3.27.0", asset_pattern = "rebar3" }
+java = "latest"
 
 [tasks.build]
 description = "Build the pano escript into dist/"

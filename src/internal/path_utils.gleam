@@ -2,18 +2,29 @@ import filepath
 import gleam/int
 import gleam/result
 
-/// Resolve a config-relative `path` against `base_dir`, normalising away `.`
-/// and `..`. An absolute `path`, or an empty `base_dir`, is returned as-is.
-///
-/// A `path` with more `..` segments than `base_dir` has parents would escape
-/// the config's own directory; that is an `Error` holding the offending path.
+fn resolve_base_dir(base_dir: String) -> Result(String, String) {
+  case base_dir {
+    "" -> Error(base_dir)
+    path ->
+      case filepath.is_absolute(path) {
+        True -> Ok(path)
+        False ->
+          filepath.expand(path)
+          |> result.replace_error(path)
+      }
+  }
+}
+
 pub fn resolve(base_dir: String, path: String) -> Result(String, String) {
-  case base_dir == "" || filepath.is_absolute(path) {
+  case filepath.is_absolute(path) {
     True -> Ok(path)
-    False ->
-      filepath.join(base_dir, path)
+    False -> {
+      use resolved_base_dir <- result.try(resolve_base_dir(base_dir))
+      resolved_base_dir
+      |> filepath.join(path)
       |> filepath.expand
       |> result.replace_error(path)
+    }
   }
 }
 

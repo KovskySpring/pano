@@ -2,13 +2,12 @@ import gleam/result
 import simplifile
 import snag
 
-/// Turn a `simplifile` failure into a `snag` carrying what was being attempted,
-/// so the error reads as `<doing>: <reason>` rather than a bare file error.
-pub fn context(
-  outcome: Result(a, simplifile.FileError),
-  while doing: String,
+pub fn with_snag_error(
+  context context: String,
+  outcome outcome: Result(a, simplifile.FileError),
 ) -> snag.Result(a) {
-  result.map_error(outcome, fn(error) {
-    snag.new(doing <> ": " <> simplifile.describe_error(error))
-  })
+  outcome
+  |> result.map_error(simplifile.describe_error)
+  |> result.map_error(snag.new)
+  |> snag.context(context)
 }

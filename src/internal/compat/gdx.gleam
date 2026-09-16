@@ -1,5 +1,4 @@
 //// Parser for the legacy libGDX TexturePacker `.atlas` text format
-//// Converts to Phaser-friendly `Page` and `Frame` structs.
 ////
 ////   <page-image.png>
 ////   size: W, H

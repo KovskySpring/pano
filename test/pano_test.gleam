@@ -1,10 +1,12 @@
 import birdie
 import config.{Spec, Variant}
+import gleam/erlang/process
 import gleam/list
 import gleeunit
 import internal/compat/gdx
 import internal/compat/phaser
 import internal/path_utils
+import internal/pool
 import pack_config.{Settings}
 
 pub fn main() -> Nil {
@@ -158,24 +160,22 @@ pub fn settings_json_snapshot_test() {
 const sample_config = "
 jar = \"vendor/packer.jar\"
 
-[[atlases]]
-name = \"default-resources\"
+[atlases.default-resources]
 source_dir = \"art/default\"
 target_dir = \"/absolute/textures\"
 
-[atlases.variants.1x]
-factor = 0.5
+[atlases.default-resources.variants.1x]
+scale_factor = 0.5
 
-[atlases.variants.2x]
-factor = 1
+[atlases.default-resources.variants.2x]
+scale_factor = 1
 
-[[atlases]]
-name = \"cities-resources-brazil\"
+[atlases.cities-resources-brazil]
 source_dir = \"art/cities/brazil\"
 target_dir = \"textures\"
 
-[atlases.variants.1x]
-factor = 0.5
+[atlases.cities-resources-brazil.variants.1x]
+scale_factor = 0.5
 "
 
 pub fn config_parse_test() {
@@ -183,32 +183,40 @@ pub fn config_parse_test() {
 
   // Relative paths resolve against the config's directory; absolute don't.
   assert parsed.jar == "repo/vendor/packer.jar"
-  // Missing `concurrency` falls back to the default.
+  // Missing `concurrency` and `timeout` fall back to their defaults.
   assert parsed.concurrency == 8
+  assert parsed.timeout == 30_000
 
-  let assert [default, brazil] = parsed.atlases
+  // Atlases are sorted by name.
+  let assert [brazil, default] = parsed.atlases
   assert default
     == Spec(
       name: "default-resources",
       source_dir: "repo/art/default",
       target_dir: "/absolute/textures",
-      // Variants are sorted by name, and an int `factor` widens to a float.
-      variants: [Variant("1x", 0.5), Variant("2x", 1.0)],
+      // Variants are sorted by name, and an int `scale_factor` widens to a
+      // float. Neither variant overrides anything, so both inherit the
+      // atlas's settings.
+      variants: [
+        Variant("1x", 0.5, pack_config.default(), 30_000),
+        Variant("2x", 1.0, pack_config.default(), 30_000),
+      ],
       gdx_settings: pack_config.default(),
+      timeout: 30_000,
     )
 
   assert brazil.name == "cities-resources-brazil"
   assert brazil.source_dir == "repo/art/cities/brazil"
   assert brazil.target_dir == "repo/textures"
-  assert brazil.variants == [Variant("1x", 0.5)]
+  assert brazil.variants == [Variant("1x", 0.5, pack_config.default(), 30_000)]
 }
 
-/// An atlas without a `[atlases.variants.*]` table packs once at factor 1.0
+/// An atlas without a `[atlases.<name>.variants.*]` table packs once at factor 1.0
 /// directly into `target_dir`, which `pack` represents as no variants at all.
 pub fn config_without_variants_test() {
   let text =
-    "jar = \"c\"\n[[atlases]]\nname = \"x\"\nsource_dir = \"x\"\ntarget_dir = \"o\"\n"
-  let assert Ok(parsed) = config.parse_config(text, base_dir: "")
+    "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n"
+  let assert Ok(parsed) = config.parse_config(text, base_dir: "/")
   let assert [atlas] = parsed.atlases
 
   assert atlas.variants == []
@@ -217,8 +225,8 @@ pub fn config_without_variants_test() {
 /// `tom` parses `0.3472` into a drifted double; `config` rounds it back.
 pub fn config_rounds_variant_factor_test() {
   let text =
-    "jar = \"c\"\n[[atlases]]\nname = \"x\"\nsource_dir = \"x\"\ntarget_dir = \"o\"\n[atlases.variants.1x]\nfactor = 0.3472\n"
-  let assert Ok(parsed) = config.parse_config(text, base_dir: "")
+    "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n[atlases.x.variants.1x]\nscale_factor = 0.3472\n"
+  let assert Ok(parsed) = config.parse_config(text, base_dir: "/")
   let assert [atlas] = parsed.atlases
   let assert [variant] = atlas.variants
 
@@ -227,19 +235,18 @@ pub fn config_rounds_variant_factor_test() {
 
 pub fn config_rejects_non_finite_factor_test() {
   let text =
-    "jar = \"c\"\n[[atlases]]\nname = \"x\"\nsource_dir = \"x\"\ntarget_dir = \"o\"\n[atlases.variants.1x]\nfactor = nan\n"
-  let assert Error(_) = config.parse_config(text, base_dir: "")
+    "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n[atlases.x.variants.1x]\nscale_factor = nan\n"
+  let assert Error(_) = config.parse_config(text, base_dir: "/")
 }
 
 pub fn config_rejects_missing_jar_test() {
-  let text =
-    "[[atlases]]\nname = \"x\"\nsource_dir = \"x\"\ntarget_dir = \"o\"\n"
-  let assert Error(_) = config.parse_config(text, base_dir: "")
+  let text = "[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n"
+  let assert Error(_) = config.parse_config(text, base_dir: "/")
 }
 
 pub fn config_rejects_missing_atlas_key_test() {
-  let text = "jar = \"c\"\n[[atlases]]\nname = \"x\"\ntarget_dir = \"o\"\n"
-  let assert Error(_) = config.parse_config(text, base_dir: "")
+  let text = "jar = \"c\"\n[atlases.x]\ntarget_dir = \"o\"\n"
+  let assert Error(_) = config.parse_config(text, base_dir: "/")
 }
 
 /// `..` is resolved away while it has a parent segment to consume; a path that
@@ -248,7 +255,7 @@ pub fn config_path_traversal_test() {
   let cfg = fn(jar) {
     "jar = \""
     <> jar
-    <> "\"\n[[atlases]]\nname = \"x\"\nsource_dir = \"x\"\ntarget_dir = \"o\"\n"
+    <> "\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n"
   }
 
   let assert Ok(parsed) =
@@ -266,12 +273,10 @@ pub fn config_path_traversal_test() {
 const overridden_gdx_config = "
 jar = \"c\"
 
-[[atlases]]
-name = \"x\"
+[atlases.x]
 source_dir = \"x\"
 target_dir = \"o\"
 
-[atlases.gdx_settings]
 pot = true
 multiple_of_four = true
 padding_x = 4
@@ -310,7 +315,7 @@ scale_resampling = \"nearest\"
 
 pub fn gdx_settings_override_test() {
   let assert Ok(parsed) =
-    config.parse_config(overridden_gdx_config, base_dir: "")
+    config.parse_config(overridden_gdx_config, base_dir: "/")
   let assert [atlas] = parsed.atlases
 
   assert atlas.gdx_settings
@@ -352,11 +357,11 @@ pub fn gdx_settings_override_test() {
     )
 }
 
-/// A partial `[atlases.gdx_settings]` leaves every key it omits at its default.
+/// A partial set of libGDX keys leaves every key it omits at its default.
 pub fn gdx_settings_partial_override_test() {
   let text =
-    "jar = \"c\"\n[[atlases]]\nname = \"x\"\nsource_dir = \"x\"\ntarget_dir = \"o\"\n[atlases.gdx_settings]\nmax_width = 4096\n"
-  let assert Ok(parsed) = config.parse_config(text, base_dir: "")
+    "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\nmax_width = 4096\n"
+  let assert Ok(parsed) = config.parse_config(text, base_dir: "/")
   let assert [atlas] = parsed.atlases
 
   assert atlas.gdx_settings
@@ -365,8 +370,105 @@ pub fn gdx_settings_partial_override_test() {
 
 pub fn gdx_settings_wrong_type_test() {
   let bad =
-    "jar = \"c\"\n[[atlases]]\nname = \"x\"\nsource_dir = \"x\"\ntarget_dir = \"o\"\n[atlases.gdx_settings]\nalias = \"no\"\n"
-  let assert Error(_) = config.parse_config(bad, base_dir: "")
+    "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\nalias = \"no\"\n"
+  let assert Error(_) = config.parse_config(bad, base_dir: "/")
+}
+
+/// A libGDX key in a variant wins over the atlas's, which wins over the
+/// default. Keys the variant leaves out fall through to whichever layer sets
+/// them.
+const layered_gdx_config = "
+jar = \"c\"
+
+[atlases.x]
+source_dir = \"x\"
+target_dir = \"o\"
+max_width = 4096
+max_height = 4096
+rotation = true
+
+[atlases.x.variants.1x]
+scale_factor = 0.5
+max_width = 1024
+grid = true
+
+[atlases.x.variants.2x]
+scale_factor = 1.0
+"
+
+pub fn gdx_settings_variant_override_test() {
+  let assert Ok(parsed) = config.parse_config(layered_gdx_config, base_dir: "/")
+  let assert [atlas] = parsed.atlases
+  let assert [one_x, two_x] = atlas.variants
+
+  assert atlas.gdx_settings
+    == Settings(
+      ..pack_config.default(),
+      max_width: 4096,
+      max_height: 4096,
+      rotation: True,
+    )
+
+  // `max_width` from the variant, `max_height`/`rotation` from the atlas,
+  // `grid` set only here, everything else still default.
+  assert one_x.gdx_settings
+    == Settings(..atlas.gdx_settings, max_width: 1024, grid: True)
+
+  // A variant that overrides nothing inherits the atlas's settings whole.
+  assert two_x.gdx_settings == atlas.gdx_settings
+}
+
+/// Root-level libGDX keys are the base every atlas overrides, and an atlas
+/// that overrides nothing inherits them whole.
+const root_gdx_config = "
+jar = \"c\"
+max_width = 4096
+rotation = true
+
+[atlases.inherits]
+source_dir = \"x\"
+target_dir = \"o\"
+
+[atlases.overrides]
+source_dir = \"x\"
+target_dir = \"o\"
+max_width = 2048
+
+[atlases.overrides.variants.1x]
+scale_factor = 0.5
+max_width = 1024
+"
+
+pub fn gdx_settings_root_override_test() {
+  let assert Ok(parsed) = config.parse_config(root_gdx_config, base_dir: "/")
+  let assert [inherits, overrides] = parsed.atlases
+
+  let root = Settings(..pack_config.default(), max_width: 4096, rotation: True)
+  assert parsed.gdx_settings == root
+
+  assert inherits.gdx_settings == root
+
+  // The atlas's `max_width` wins over the root's; `rotation` still falls
+  // through from the root.
+  assert overrides.gdx_settings == Settings(..root, max_width: 2048)
+
+  // And the variant's wins over both.
+  let assert [one_x] = overrides.variants
+  assert one_x.gdx_settings == Settings(..root, max_width: 1024)
+}
+
+/// Root-level libGDX keys are type-checked the same as an atlas's.
+pub fn gdx_settings_root_wrong_type_test() {
+  let bad =
+    "jar = \"c\"\nalias = \"no\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n"
+  let assert Error(_) = config.parse_config(bad, base_dir: "/")
+}
+
+/// A variant's libGDX keys are type-checked the same as an atlas's.
+pub fn gdx_settings_variant_wrong_type_test() {
+  let bad =
+    "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n[atlases.x.variants.1x]\nscale_factor = 0.5\nalias = \"no\"\n"
+  let assert Error(_) = config.parse_config(bad, base_dir: "/")
 }
 
 // --- config: the shipped packs.toml ------------------------------------
@@ -380,16 +482,134 @@ pub fn shipped_config_test() {
   // 6 simple + 6 cities + 7 tournament themes.
   assert list.length(loaded.atlases) == 19
   assert loaded.concurrency == 8
+  assert loaded.timeout == 120_000
+
+  let root =
+    Settings(
+      ..pack_config.default(),
+      max_width: 4096,
+      max_height: 4096,
+      bleed_iterations: 4,
+    )
+  assert loaded.gdx_settings == root
 
   let names = list.map(loaded.atlases, fn(atlas) { atlas.name })
   assert list.contains(names, "default-resources")
+
+  // An atlas that overrides nothing inherits the root's settings whole.
+  let assert Ok(default_resources) =
+    list.find(loaded.atlases, fn(atlas) { atlas.name == "default-resources" })
+  assert default_resources.gdx_settings == root
+  assert default_resources.timeout == 120_000
 
   let assert Ok(germany) =
     list.find(loaded.atlases, fn(atlas) {
       atlas.name == "cities-resources-germany"
     })
   assert germany.source_dir == "assets/original/images/cities/germany"
-  assert germany.gdx_settings == pack_config.default()
+  assert germany.timeout == 300_000
+  assert list.map(germany.variants, fn(variant) { variant.timeout })
+    == [300_000, 300_000, 300_000]
   assert list.map(germany.variants, fn(variant) { variant.name })
     == ["1x", "2_88x", "2x"]
+
+  // Germany narrows `max_width`, and its 1x pass narrows it again; the other
+  // two passes stop at the atlas's value. `max_height`/`bleed_iterations`
+  // fall through from the root at every layer.
+  assert germany.gdx_settings == Settings(..root, max_width: 2048)
+  assert list.map(germany.variants, fn(variant) {
+      variant.gdx_settings.max_width
+    })
+    == [1024, 2048, 2048]
+  assert list.map(germany.variants, fn(variant) {
+      #(variant.gdx_settings.max_height, variant.gdx_settings.bleed_iterations)
+    })
+    == [#(4096, 4), #(4096, 4), #(4096, 4)]
+}
+
+// --- config: timeouts --------------------------------------------------
+
+/// `timeout` resolves like the libGDX settings: variant, then atlas, then
+/// root, then the 30s default.
+const layered_timeout_config = "
+jar = \"c\"
+timeout = 120_000
+
+[atlases.x]
+source_dir = \"x\"
+target_dir = \"o\"
+timeout = 60_000
+
+[atlases.x.variants.1x]
+scale_factor = 0.5
+timeout = 5000
+
+[atlases.x.variants.2x]
+scale_factor = 1.0
+
+[atlases.y]
+source_dir = \"y\"
+target_dir = \"o\"
+"
+
+pub fn config_timeout_layers_test() {
+  let assert Ok(parsed) =
+    config.parse_config(layered_timeout_config, base_dir: "/")
+  let assert [x, y] = parsed.atlases
+  let assert [one_x, two_x] = x.variants
+
+  assert parsed.timeout == 120_000
+  // The atlas overrides the root, and the variant overrides the atlas.
+  assert x.timeout == 60_000
+  assert one_x.timeout == 5000
+  assert two_x.timeout == 60_000
+  // An atlas that sets nothing inherits the root's.
+  assert y.timeout == 120_000
+}
+
+/// A timeout of zero or less would fail every job before it started.
+pub fn config_rejects_non_positive_timeout_test() {
+  let text =
+    "jar = \"c\"\ntimeout = 0\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n"
+  let assert Error(config.InvalidTimeout(0)) =
+    config.parse_config(text, base_dir: "/")
+
+  let variant =
+    "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n[atlases.x.variants.1x]\nscale_factor = 0.5\ntimeout = -1\n"
+  let assert Error(config.InvalidTimeout(-1)) =
+    config.parse_config(variant, base_dir: "/")
+}
+
+// --- pool ---------------------------------------------------------------
+
+/// An item that outruns its timeout reports `TimedOut` without holding up the
+/// items beside it, and its work is killed rather than left running.
+pub fn pool_times_out_slow_item_test() {
+  let escaped = process.new_subject()
+
+  let results =
+    pool.exec(
+      [#(0, 10), #(1, 2000), #(2, 10)],
+      limit: 3,
+      timeout: fn(item) {
+        case item {
+          #(1, _) -> 100
+          _ -> 5000
+        }
+      },
+      run: fn(item) {
+        let #(index, nap) = item
+        process.sleep(nap)
+        // Only reached by an item that was not killed.
+        process.send(escaped, index)
+        index
+      },
+    )
+
+  assert results == [pool.Finished(0), pool.TimedOut, pool.Finished(2)]
+
+  // The two that finished reported in; the killed one never does.
+  let assert Ok(_) = process.receive(escaped, within: 100)
+  let assert Ok(_) = process.receive(escaped, within: 100)
+  let assert Error(Nil) = process.receive(escaped, within: 2500)
 }

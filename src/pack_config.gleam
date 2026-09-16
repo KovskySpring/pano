@@ -10,7 +10,7 @@
 ////
 //// `encode` writes the JSON that `pack` hands to the jar as its settings
 //// file; each `default_*` constant is the fallback `packer/config` uses for
-//// a key left out of `[atlases.gdx_settings]`.
+//// a key left out of `[atlases.<name>]`.
 
 import gleam/json
 

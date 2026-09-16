@@ -62,22 +62,61 @@ and validation.
 | ------------- | ------ | -------- | ------- | -------------------------------------------------------------------------- |
 | `jar`         | string | ✓        | -       | Path to the runnable `texturepacker.jar`.                                  |
 | `concurrency` | int    |          | `8`     | Maximum number of pack jobs run in parallel. Values below 1 are clamped to 1. |
+| `timeout`     | int    |          | `30000` | Milliseconds a single pack job may run for before it is killed and reported as failed. Must be at least 1. |
 
-### `[[atlases]]`
+Any [libGDX setting](#libgdx-settings) may also sit here, applying to every atlas.
 
-Each entry in the `[[atlases]]` array defines one atlas to pack.
+> TOML puts bare keys into whichever table header precedes them, so root-level
+> settings must be written **above** the first `[atlases.<name>]` header.
 
-| Key          | Type   | Required | Default | Description                                                                             |
-| ------------ | ------ | -------- | ------- | --------------------------------------------------------------------------------------- |
-| `name`       | string | ✓        | -       | Atlas name. Used as the base filename for all outputs (`<name>.json`, `<name>.png`, …). |
-| `source_dir` | string | ✓        | -       | Directory containing the source images to pack.                                         |
-| `target_dir` | string | ✓        | -       | Root output directory for this atlas.                                                   |
+### `[atlases.<name>]`
 
-### `[atlases.gdx_settings]`
+Each `[atlases.<name>]` table defines one atlas to pack. The `<name>` key is the atlas
+name, used as the base filename for all outputs (`<name>.json`, `<name>.png`, …).
 
-Every key in this table is optional and maps to a libGDX TexturePacker setting,
-forwarded verbatim to the packer. Omit the table entirely to pack with the defaults
-below; include it to override only the keys you list.
+| Key          | Type   | Required | Default | Description                                     |
+| ------------ | ------ | -------- | ------- | ------------------------------------------------- |
+| `source_dir` | string | ✓        | -       | Directory containing the source images to pack. |
+| `target_dir` | string | ✓        | -       | Root output directory for this atlas.           |
+| `timeout`    | int    |          | root's  | Milliseconds one pack job of this atlas may run for. |
+
+### Job timeouts
+
+Every pack job runs with a deadline. `timeout` resolves the same way the libGDX
+settings do:
+
+```
+variant → atlas → root → 30000 (30 seconds)
+```
+
+A job that exceeds its budget is killed and reported as a failure alongside any
+other failed jobs, rather than hanging the whole run. Raise it for large atlases
+downscaled at several factors; the packer is single-threaded per job and a
+thousand-sprite source can take minutes.
+
+When the deadline passes pano kills that job's JVM (`SIGKILL`), so a runaway
+TexturePacker does not keep holding the cores the remaining jobs need. A job
+wedged somewhere other than the packer is abandoned a few seconds later.
+
+### libGDX settings
+
+Every key below is optional and maps to a libGDX TexturePacker setting forwarded
+verbatim to the packer. They are written as plain keys in one of three places:
+
+| Where                                  | Applies to                  |
+| -------------------------------------- | --------------------------- |
+| the root of the file                   | every atlas                 |
+| `[atlases.<name>]`                     | one atlas                   |
+| `[atlases.<name>.variants.<variant>]`  | one atlas at one scale pass |
+
+Each key resolves independently, so an atlas that overrides `max_width` still inherits
+the root's `rotation`:
+
+```
+variant → atlas → root → default
+```
+
+The `Default` column below is what a key resolves to when no layer sets it.
 
 | Key                      | Type   | Default         | Description                                                                      |
 | ------------------------ | ------ | --------------- | -------------------------------------------------------------------------------- |
@@ -117,44 +156,54 @@ below; include it to override only the keys you list.
 | `scale_resampling`       | string | `"bicubic"`     | Resampling algorithm used when downscaling (`bicubic`, `bilinear`, `nearest`).   |
 
 Not exposed, because pano's pipeline depends on them: `scale`/`scaleSuffix` (driven by
-`[atlases.variants]`), `outputFormat`/`jpegQuality` (pages are PNG end to end),
+the variants table), `outputFormat`/`jpegQuality` (pages are PNG end to end),
 `atlasExtension`/`legacyOutput`/`prettyPrint` (the `.atlas` parser reads the legacy format)
 and `ignore` (skips the whole source directory when set at the root).
 
-### `[atlases.variants.<name>]`
+### `[atlases.<name>.variants.<variant>]`
 
 Variants produce one scaled output per entry.
 When no variants are declared the atlas is packed once at factor `1.0` directly into `target_dir`.
-When variants are present each one writes into `<target_dir>/<variant-name>/`.
+When variants are present each one writes into `<target_dir>/<variant>/`.
 
-The `<name>` key is arbitrary and becomes the subdirectory name (e.g. `1x`, `2x`).
+The `<variant>` key is arbitrary and becomes the subdirectory name (e.g. `1x`, `2x`).
 
-| Key      | Type  | Required | Description                                                                         |
-| -------- | ----- | -------- | ----------------------------------------------------------------------------------- |
-| `factor` | float | ✓        | Scale factor applied to the source images for this pass (e.g. `0.5` for half-size). |
+| Key            | Type  | Required | Description                                                                         |
+| -------------- | ----- | -------- | ----------------------------------------------------------------------------------- |
+| `scale_factor` | float | ✓        | Scale factor applied to the source images for this pass (e.g. `0.5` for half-size). |
+| `timeout`      | int   |          | Milliseconds this pass may run for, overriding the atlas's.                         |
+
+Any [libGDX setting](#libgdx-settings) may also be listed here to override the atlas's
+value for this pass only. Useful when a downscaled variant needs different limits, e.g.
+a smaller `max_width` or more `bleed_iterations`.
 
 ### Annotated example
 
 ```toml
 jar = "vendor/runnable-texturepacker.jar"
 concurrency = 4
+timeout     = 120_000
 
-[[atlases]]
-name       = "ui-resources"
+# Root-level libGDX settings, applying to every atlas below
+bleed_iterations = 4
+rotation         = true
+
+[atlases.ui-resources]
 source_dir = "assets/images/ui"
 target_dir = "assets/textures"
 
-# libGDX settings override (the whole table is optional, as is every key in it)
-[atlases.gdx_settings]
+# Overrides for this atlas; `bleed_iterations` and `rotation` still come from the root
 max_width  = 4096
 max_height = 4096
-rotation   = true
 
-[atlases.variants.1x]
-factor = 0.5
+[atlases.ui-resources.variants.1x]
+scale_factor = 0.5
+timeout    = 240_000  # this pass downscales the most, so give it longer
+max_width  = 2048   # overrides the atlas's 4096 for this pass only
+max_height = 2048
 
-[atlases.variants.2x]
-factor = 1.0
+[atlases.ui-resources.variants.2x]
+scale_factor = 1.0  # inherits the atlas's settings whole
 ```
 
 Output layout for the example above:
@@ -169,7 +218,7 @@ assets/textures/
     ui-resources.json
 ```
 
-Drop the `[atlases.variants.*]` tables and the atlas is packed once at factor `1.0`,
+Drop the `[atlases.<name>.variants.*]` tables and the atlas is packed once at factor `1.0`,
 writing `ui-resources-0.png` and `ui-resources.json` straight into `assets/textures/`.
 
 ## License

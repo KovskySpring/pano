@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "packs.toml",
-  "description": "Texture packing config for `pano`, read from `packs.toml` in the current directory or from the path given to `--config`. Relative paths resolve against this file's directory and may not climb above it. Unknown keys are ignored, matching the loader. See src/packer/config.gleam for the loader.",
+  "description": "Texture packing config for `pano`, read from `packs.toml` in the current directory or from the path given to `--config`. Relative paths resolve against this file's directory and may not climb above it. Every libGDX TexturePacker setting may be set here at the root, on an atlas, or on a single variant; each key resolves variant → atlas → root → default independently. Unknown keys are ignored, matching the loader. See src/config.gleam for the loader.",
   "type": "object",
   "required": [
     "jar",
@@ -18,27 +18,231 @@
       "description": "Number of pack jobs (one atlas at one variant's scale) to run concurrently. Values below 1 are clamped to 1."
     },
     "atlases": {
-      "type": "array",
-      "minItems": 1,
-      "description": "The atlas registry. Must have at least one entry.",
-      "items": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "The atlas registry, keyed by atlas name. Must have at least one entry.",
+      "additionalProperties": {
         "$ref": "#/definitions/atlas"
       }
+    },
+    "pot": {
+      "type": "boolean",
+      "default": false,
+      "description": "Pad output pages to power-of-two dimensions."
+    },
+    "multiple_of_four": {
+      "type": "boolean",
+      "default": false,
+      "description": "Pad output pages to dimensions that are a multiple of four, as some compressed texture formats require."
+    },
+    "min_width": {
+      "type": "integer",
+      "default": 16,
+      "description": "Minimum width of a packed page, in pixels."
+    },
+    "min_height": {
+      "type": "integer",
+      "default": 16,
+      "description": "Minimum height of a packed page, in pixels."
+    },
+    "square": {
+      "type": "boolean",
+      "default": false,
+      "description": "Force every packed page to have the same width and height."
+    },
+    "wrap_x": {
+      "type": "string",
+      "default": "ClampToEdge",
+      "description": "Horizontal texture wrap mode written to the atlas. Forwarded verbatim, not validated.",
+      "examples": [
+        "ClampToEdge",
+        "Repeat",
+        "MirroredRepeat"
+      ]
+    },
+    "wrap_y": {
+      "type": "string",
+      "default": "ClampToEdge",
+      "description": "Vertical texture wrap mode written to the atlas. Forwarded verbatim, not validated.",
+      "examples": [
+        "ClampToEdge",
+        "Repeat",
+        "MirroredRepeat"
+      ]
+    },
+    "alias": {
+      "type": "boolean",
+      "default": true,
+      "description": "Pack pixel-identical images only once and point every duplicate region at the same pixels. Turn off to keep one region per source image."
+    },
+    "ignore_blank_images": {
+      "type": "boolean",
+      "default": true,
+      "description": "Skip fully transparent source images instead of adding an empty region for them."
+    },
+    "fast": {
+      "type": "boolean",
+      "default": false,
+      "description": "Pack much faster at the cost of less efficient page layouts."
+    },
+    "debug": {
+      "type": "boolean",
+      "default": false,
+      "description": "Draw the bounds of every packed image onto the output pages."
+    },
+    "silent": {
+      "type": "boolean",
+      "default": false,
+      "description": "Suppress the packer's own progress output."
+    },
+    "premultiply_alpha": {
+      "type": "boolean",
+      "default": false,
+      "description": "Multiply RGB by alpha in the output pages (premultiplied alpha)."
+    },
+    "bleed_iterations": {
+      "type": "integer",
+      "default": 2,
+      "minimum": 1,
+      "description": "Number of bleed passes when `bleed` is on. Raise to 4 or 8 if downscaled sprites show dark fringes."
+    },
+    "limit_memory": {
+      "type": "boolean",
+      "default": true,
+      "description": "Hold only one source image in memory at a time, reading each image twice. Off keeps every image in memory and reads each once."
+    },
+    "grid": {
+      "type": "boolean",
+      "default": false,
+      "description": "Place images in a uniform grid, in order, instead of bin packing."
+    },
+    "padding_x": {
+      "type": "integer",
+      "default": 2,
+      "description": "Horizontal padding between packed images, in pixels."
+    },
+    "padding_y": {
+      "type": "integer",
+      "default": 2,
+      "description": "Vertical padding between packed images, in pixels."
+    },
+    "edge_padding": {
+      "type": "boolean",
+      "default": true,
+      "description": "Apply padding to the edges of the packed page."
+    },
+    "duplicate_padding": {
+      "type": "boolean",
+      "default": true,
+      "description": "Fill padding by duplicating the edge pixels of each image."
+    },
+    "rotation": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow rotating images 90 degrees to improve packing."
+    },
+    "strip_whitespace_x": {
+      "type": "boolean",
+      "default": true,
+      "description": "Strip transparent horizontal whitespace from source images before packing."
+    },
+    "strip_whitespace_y": {
+      "type": "boolean",
+      "default": true,
+      "description": "Strip transparent vertical whitespace from source images before packing."
+    },
+    "alpha_threshold": {
+      "type": "integer",
+      "default": 0,
+      "description": "Alpha value below which a pixel is considered transparent for whitespace stripping."
+    },
+    "filter_min": {
+      "type": "string",
+      "default": "Linear",
+      "description": "Minification texture filter, e.g. `Nearest`, `Linear`, `MipMapLinearLinear`. Forwarded verbatim, not validated.",
+      "examples": [
+        "Nearest",
+        "Linear",
+        "MipMap",
+        "MipMapNearestNearest",
+        "MipMapLinearNearest",
+        "MipMapNearestLinear",
+        "MipMapLinearLinear"
+      ]
+    },
+    "filter_mag": {
+      "type": "string",
+      "default": "Linear",
+      "description": "Magnification texture filter, e.g. `Nearest`, `Linear`. Forwarded verbatim, not validated.",
+      "examples": [
+        "Nearest",
+        "Linear"
+      ]
+    },
+    "format": {
+      "type": "string",
+      "default": "RGBA8888",
+      "description": "Pixel format of the packed page. Forwarded verbatim, not validated.",
+      "examples": [
+        "RGBA8888",
+        "RGBA4444",
+        "RGB888",
+        "RGB565",
+        "Alpha",
+        "Intensity",
+        "LuminanceAlpha"
+      ]
+    },
+    "max_width": {
+      "type": "integer",
+      "default": 2048,
+      "description": "Maximum width of a packed page, in pixels."
+    },
+    "max_height": {
+      "type": "integer",
+      "default": 2048,
+      "description": "Maximum height of a packed page, in pixels."
+    },
+    "combine_subdirectories": {
+      "type": "boolean",
+      "default": true,
+      "description": "Combine images from subdirectories of `source_dir` into the parent atlas."
+    },
+    "flatten_paths": {
+      "type": "boolean",
+      "default": false,
+      "description": "Use only the image filename, discarding its subdirectory path, as the packed region name."
+    },
+    "use_indexes": {
+      "type": "boolean",
+      "default": false,
+      "description": "Use `_<index>` filename suffixes to indicate animation frame indices."
+    },
+    "bleed": {
+      "type": "boolean",
+      "default": true,
+      "description": "Bleed transparent pixel colors into the padding to avoid dark edges from filtering."
+    },
+    "scale_resampling": {
+      "type": "string",
+      "default": "bicubic",
+      "description": "Resampling filter used when downscaling for a variant's factor. Forwarded verbatim, not validated.",
+      "examples": [
+        "nearest",
+        "bilinear",
+        "bicubic"
+      ]
     }
   },
   "definitions": {
     "atlas": {
       "type": "object",
+      "description": "One atlas to pack. Its table key is the atlas name, used as the output filename stem. Alongside `source_dir`/`target_dir`/`variants`, every libGDX TexturePacker setting is accepted here and forwarded verbatim to the packer; any key left out falls back to the root's value, then to its own default. A variant may override any of them for its own pass. `scale`/`scaleSuffix` (driven by variants), `outputFormat`/`jpegQuality` (pages are PNG end to end), `atlasExtension`/`legacyOutput`/`prettyPrint` (the `.atlas` parser reads the legacy format) and `ignore` are not exposed, because pano's pipeline depends on them.",
       "required": [
-        "name",
         "source_dir",
         "target_dir"
       ],
       "properties": {
-        "name": {
-          "type": "string",
-          "description": "Atlas name, used as the output filename stem."
-        },
         "source_dir": {
           "type": "string",
           "description": "Source image directory for this atlas. Relative paths resolve against this file's directory."
@@ -55,57 +259,28 @@
             "$ref": "#/definitions/variant"
           }
         },
-        "gdx_settings": {
-          "$ref": "#/definitions/gdx_settings",
-          "description": "libGDX TexturePacker settings for this atlas. Absent means pack with every default; any key left out of the table falls back to its own default."
-        }
-      }
-    },
-    "variant": {
-      "type": "object",
-      "required": [
-        "factor"
-      ],
-      "properties": {
-        "factor": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "description": "Downscale factor forwarded to libGDX TexturePacker for this variant's pass, e.g. `0.5` for a half-size output. Accepted as an int or float TOML literal; the loader rejects only non-finite values."
-        }
-      }
-    },
-    "gdx_settings": {
-      "type": "object",
-      "description": "libGDX TexturePacker settings, forwarded verbatim to the packer. `scale`/`scaleSuffix` (driven by variants), `outputFormat`/`jpegQuality` (pages are PNG end to end), `atlasExtension`/`legacyOutput`/`prettyPrint` (the `.atlas` parser reads the legacy format) and `ignore` are not exposed, because pano's pipeline depends on them.",
-      "properties": {
         "pot": {
           "type": "boolean",
-          "default": false,
           "description": "Pad output pages to power-of-two dimensions."
         },
         "multiple_of_four": {
           "type": "boolean",
-          "default": false,
           "description": "Pad output pages to dimensions that are a multiple of four, as some compressed texture formats require."
         },
         "min_width": {
           "type": "integer",
-          "default": 16,
           "description": "Minimum width of a packed page, in pixels."
         },
         "min_height": {
           "type": "integer",
-          "default": 16,
           "description": "Minimum height of a packed page, in pixels."
         },
         "square": {
           "type": "boolean",
-          "default": false,
           "description": "Force every packed page to have the same width and height."
         },
         "wrap_x": {
           "type": "string",
-          "default": "ClampToEdge",
           "description": "Horizontal texture wrap mode written to the atlas. Forwarded verbatim, not validated.",
           "examples": [
             "ClampToEdge",
@@ -115,7 +290,6 @@
         },
         "wrap_y": {
           "type": "string",
-          "default": "ClampToEdge",
           "description": "Vertical texture wrap mode written to the atlas. Forwarded verbatim, not validated.",
           "examples": [
             "ClampToEdge",
@@ -125,93 +299,75 @@
         },
         "alias": {
           "type": "boolean",
-          "default": true,
           "description": "Pack pixel-identical images only once and point every duplicate region at the same pixels. Turn off to keep one region per source image."
         },
         "ignore_blank_images": {
           "type": "boolean",
-          "default": true,
           "description": "Skip fully transparent source images instead of adding an empty region for them."
         },
         "fast": {
           "type": "boolean",
-          "default": false,
           "description": "Pack much faster at the cost of less efficient page layouts."
         },
         "debug": {
           "type": "boolean",
-          "default": false,
           "description": "Draw the bounds of every packed image onto the output pages."
         },
         "silent": {
           "type": "boolean",
-          "default": false,
           "description": "Suppress the packer's own progress output."
         },
         "premultiply_alpha": {
           "type": "boolean",
-          "default": false,
           "description": "Multiply RGB by alpha in the output pages (premultiplied alpha)."
         },
         "bleed_iterations": {
           "type": "integer",
-          "default": 2,
           "minimum": 1,
           "description": "Number of bleed passes when `bleed` is on. Raise to 4 or 8 if downscaled sprites show dark fringes."
         },
         "limit_memory": {
           "type": "boolean",
-          "default": true,
           "description": "Hold only one source image in memory at a time, reading each image twice. Off keeps every image in memory and reads each once."
         },
         "grid": {
           "type": "boolean",
-          "default": false,
           "description": "Place images in a uniform grid, in order, instead of bin packing."
         },
         "padding_x": {
           "type": "integer",
-          "default": 2,
           "description": "Horizontal padding between packed images, in pixels."
         },
         "padding_y": {
           "type": "integer",
-          "default": 2,
           "description": "Vertical padding between packed images, in pixels."
         },
         "edge_padding": {
           "type": "boolean",
-          "default": true,
           "description": "Apply padding to the edges of the packed page."
         },
         "duplicate_padding": {
           "type": "boolean",
-          "default": true,
           "description": "Fill padding by duplicating the edge pixels of each image."
         },
         "rotation": {
           "type": "boolean",
-          "default": false,
           "description": "Allow rotating images 90 degrees to improve packing."
         },
         "strip_whitespace_x": {
           "type": "boolean",
-          "default": true,
           "description": "Strip transparent horizontal whitespace from source images before packing."
         },
         "strip_whitespace_y": {
           "type": "boolean",
-          "default": true,
           "description": "Strip transparent vertical whitespace from source images before packing."
         },
         "alpha_threshold": {
           "type": "integer",
-          "default": 0,
           "description": "Alpha value below which a pixel is considered transparent for whitespace stripping."
         },
         "filter_min": {
           "type": "string",
-          "default": "Linear",
           "description": "Minification texture filter, e.g. `Nearest`, `Linear`, `MipMapLinearLinear`. Forwarded verbatim, not validated.",
           "examples": [
             "Nearest",
@@ -225,7 +381,6 @@
         },
         "filter_mag": {
           "type": "string",
-          "default": "Linear",
           "description": "Magnification texture filter, e.g. `Nearest`, `Linear`. Forwarded verbatim, not validated.",
           "examples": [
             "Nearest",
@@ -234,7 +389,6 @@
         },
         "format": {
           "type": "string",
-          "default": "RGBA8888",
           "description": "Pixel format of the packed page. Forwarded verbatim, not validated.",
           "examples": [
             "RGBA8888",
@@ -248,37 +402,30 @@
         },
         "max_width": {
           "type": "integer",
-          "default": 2048,
           "description": "Maximum width of a packed page, in pixels."
         },
         "max_height": {
           "type": "integer",
-          "default": 2048,
           "description": "Maximum height of a packed page, in pixels."
         },
         "combine_subdirectories": {
           "type": "boolean",
-          "default": true,
           "description": "Combine images from subdirectories of `source_dir` into the parent atlas."
         },
         "flatten_paths": {
           "type": "boolean",
-          "default": false,
           "description": "Use only the image filename, discarding its subdirectory path, as the packed region name."
         },
         "use_indexes": {
           "type": "boolean",
-          "default": false,
           "description": "Use `_<index>` filename suffixes to indicate animation frame indices."
         },
         "bleed": {
           "type": "boolean",
-          "default": true,
           "description": "Bleed transparent pixel colors into the padding to avoid dark edges from filtering."
         },
         "scale_resampling": {
           "type": "string",
-          "default": "bicubic",
           "description": "Resampling filter used when downscaling for a variant's factor. Forwarded verbatim, not validated.",
           "examples": [
             "nearest",
@@ -287,6 +434,194 @@
           ]
         }
       }
+    },
+    "variant": {
+      "type": "object",
+      "required": [
+        "scale_factor"
+      ],
+      "properties": {
+        "scale_factor": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Downscale factor forwarded to libGDX TexturePacker for this variant's pass, e.g. `0.5` for a half-size output. Accepted as an int or float TOML literal; the loader rejects only non-finite values."
+        },
+        "pot": {
+          "type": "boolean",
+          "description": "Pad output pages to power-of-two dimensions."
+        },
+        "multiple_of_four": {
+          "type": "boolean",
+          "description": "Pad output pages to dimensions that are a multiple of four, as some compressed texture formats require."
+        },
+        "min_width": {
+          "type": "integer",
+          "description": "Minimum width of a packed page, in pixels."
+        },
+        "min_height": {
+          "type": "integer",
+          "description": "Minimum height of a packed page, in pixels."
+        },
+        "square": {
+          "type": "boolean",
+          "description": "Force every packed page to have the same width and height."
+        },
+        "wrap_x": {
+          "type": "string",
+          "description": "Horizontal texture wrap mode written to the atlas. Forwarded verbatim, not validated.",
+          "examples": [
+            "ClampToEdge",
+            "Repeat",
+            "MirroredRepeat"
+          ]
+        },
+        "wrap_y": {
+          "type": "string",
+          "description": "Vertical texture wrap mode written to the atlas. Forwarded verbatim, not validated.",
+          "examples": [
+            "ClampToEdge",
+            "Repeat",
+            "MirroredRepeat"
+          ]
+        },
+        "alias": {
+          "type": "boolean",
+          "description": "Pack pixel-identical images only once and point every duplicate region at the same pixels. Turn off to keep one region per source image."
+        },
+        "ignore_blank_images": {
+          "type": "boolean",
+          "description": "Skip fully transparent source images instead of adding an empty region for them."
+        },
+        "fast": {
+          "type": "boolean",
+          "description": "Pack much faster at the cost of less efficient page layouts."
+        },
+        "debug": {
+          "type": "boolean",
+          "description": "Draw the bounds of every packed image onto the output pages."
+        },
+        "silent": {
+          "type": "boolean",
+          "description": "Suppress the packer's own progress output."
+        },
+        "premultiply_alpha": {
+          "type": "boolean",
+          "description": "Multiply RGB by alpha in the output pages (premultiplied alpha)."
+        },
+        "bleed_iterations": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of bleed passes when `bleed` is on. Raise to 4 or 8 if downscaled sprites show dark fringes."
+        },
+        "limit_memory": {
+          "type": "boolean",
+          "description": "Hold only one source image in memory at a time, reading each image twice. Off keeps every image in memory and reads each once."
+        },
+        "grid": {
+          "type": "boolean",
+          "description": "Place images in a uniform grid, in order, instead of bin packing."
+        },
+        "padding_x": {
+          "type": "integer",
+          "description": "Horizontal padding between packed images, in pixels."
+        },
+        "padding_y": {
+          "type": "integer",
+          "description": "Vertical padding between packed images, in pixels."
+        },
+        "edge_padding": {
+          "type": "boolean",
+          "description": "Apply padding to the edges of the packed page."
+        },
+        "duplicate_padding": {
+          "type": "boolean",
+          "description": "Fill padding by duplicating the edge pixels of each image."
+        },
+        "rotation": {
+          "type": "boolean",
+          "description": "Allow rotating images 90 degrees to improve packing."
+        },
+        "strip_whitespace_x": {
+          "type": "boolean",
+          "description": "Strip transparent horizontal whitespace from source images before packing."
+        },
+        "strip_whitespace_y": {
+          "type": "boolean",
+          "description": "Strip transparent vertical whitespace from source images before packing."
+        },
+        "alpha_threshold": {
+          "type": "integer",
+          "description": "Alpha value below which a pixel is considered transparent for whitespace stripping."
+        },
+        "filter_min": {
+          "type": "string",
+          "description": "Minification texture filter, e.g. `Nearest`, `Linear`, `MipMapLinearLinear`. Forwarded verbatim, not validated.",
+          "examples": [
+            "Nearest",
+            "Linear",
+            "MipMap",
+            "MipMapNearestNearest",
+            "MipMapLinearNearest",
+            "MipMapNearestLinear",
+            "MipMapLinearLinear"
+          ]
+        },
+        "filter_mag": {
+          "type": "string",
+          "description": "Magnification texture filter, e.g. `Nearest`, `Linear`. Forwarded verbatim, not validated.",
+          "examples": [
+            "Nearest",
+            "Linear"
+          ]
+        },
+        "format": {
+          "type": "string",
+          "description": "Pixel format of the packed page. Forwarded verbatim, not validated.",
+          "examples": [
+            "RGBA8888",
+            "RGBA4444",
+            "RGB888",
+            "RGB565",
+            "Alpha",
+            "Intensity",
+            "LuminanceAlpha"
+          ]
+        },
+        "max_width": {
+          "type": "integer",
+          "description": "Maximum width of a packed page, in pixels."
+        },
+        "max_height": {
+          "type": "integer",
+          "description": "Maximum height of a packed page, in pixels."
+        },
+        "combine_subdirectories": {
+          "type": "boolean",
+          "description": "Combine images from subdirectories of `source_dir` into the parent atlas."
+        },
+        "flatten_paths": {
+          "type": "boolean",
+          "description": "Use only the image filename, discarding its subdirectory path, as the packed region name."
+        },
+        "use_indexes": {
+          "type": "boolean",
+          "description": "Use `_<index>` filename suffixes to indicate animation frame indices."
+        },
+        "bleed": {
+          "type": "boolean",
+          "description": "Bleed transparent pixel colors into the padding to avoid dark edges from filtering."
+        },
+        "scale_resampling": {
+          "type": "string",
+          "description": "Resampling filter used when downscaling for a variant's factor. Forwarded verbatim, not validated.",
+          "examples": [
+            "nearest",
+            "bilinear",
+            "bicubic"
+          ]
+        }
+      },
+      "description": "One scale pass. Its table key becomes the output subdirectory name. Any libGDX TexturePacker setting may be repeated here to override the value the enclosing atlas sets; keys left out fall through to the atlas, then the root, then the default."
     }
   }
 }
