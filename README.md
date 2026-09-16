@@ -5,7 +5,7 @@ using libGDX's TexturePacker under the hood.
 
 ## Prerequisites
 
-- Erlang/OTP 27+ (for running the `pano` escript). Checked at startup; older releases are rejected.
+- Erlang/OTP 27+ (for running the `pano` escript). The install script checks this; older releases are rejected.
 - A JVM (Java 8+) on `PATH` as `java` (for libGDX's TexturePacker). Checked before packing.
 - `runnable-texturepacker.jar` (for libGDX's TexturePacker). See [libGDX's TexturePacker](https://libgdx.com/wiki/tools/texture-packer).
 
@@ -65,6 +65,7 @@ and validation.
 | `timeout`     | int    |          | `30000` | Milliseconds a single pack job may run for before it is killed and reported as failed. Must be at least 1. |
 
 Any [libGDX setting](#libgdx-settings) may also sit here, applying to every atlas.
+Unknown keys are ignored.
 
 > TOML puts bare keys into whichever table header precedes them, so root-level
 > settings must be written **above** the first `[atlases.<name>]` header.
@@ -72,13 +73,13 @@ Any [libGDX setting](#libgdx-settings) may also sit here, applying to every atla
 ### `[atlases.<name>]`
 
 Each `[atlases.<name>]` table defines one atlas to pack. The `<name>` key is the atlas
-name, used as the base filename for all outputs (`<name>.json`, `<name>.png`, …).
+name, used as the base filename for all outputs (`<name>.json`, `<name>-0.png`, `<name>-1.png`, …).
 
 | Key          | Type   | Required | Default | Description                                     |
 | ------------ | ------ | -------- | ------- | ------------------------------------------------- |
 | `source_dir` | string | ✓        | -       | Directory containing the source images to pack. |
 | `target_dir` | string | ✓        | -       | Root output directory for this atlas.           |
-| `timeout`    | int    |          | root's  | Milliseconds one pack job of this atlas may run for. |
+| `timeout`    | int    |          | root's  | Milliseconds one pack job of this atlas may run for. Must be at least 1. |
 
 ### Job timeouts
 
@@ -168,10 +169,10 @@ When variants are present each one writes into `<target_dir>/<variant>/`.
 
 The `<variant>` key is arbitrary and becomes the subdirectory name (e.g. `1x`, `2x`).
 
-| Key            | Type  | Required | Description                                                                         |
-| -------------- | ----- | -------- | ----------------------------------------------------------------------------------- |
-| `scale_factor` | float | ✓        | Scale factor applied to the source images for this pass (e.g. `0.5` for half-size). |
-| `timeout`      | int   |          | Milliseconds this pass may run for, overriding the atlas's.                         |
+| Key            | Type   | Required | Description                                                                                          |
+| -------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------- |
+| `scale_factor` | number | ✓        | Scale factor applied to the source images for this pass (e.g. `0.5` for half-size). Int or float; `inf`/`nan` are rejected. |
+| `timeout`      | int    |          | Milliseconds this pass may run for, overriding the atlas's. Must be at least 1.                      |
 
 Any [libGDX setting](#libgdx-settings) may also be listed here to override the atlas's
 value for this pass only. Useful when a downscaled variant needs different limits, e.g.

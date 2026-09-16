@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "packs.toml",
-  "description": "Texture packing config for `pano`, read from `packs.toml` in the current directory or from the path given to `--config`. Relative paths resolve against this file's directory and may not climb above it. Every libGDX TexturePacker setting may be set here at the root, on an atlas, or on a single variant; each key resolves variant → atlas → root → default independently. Unknown keys are ignored, matching the loader. See src/config.gleam for the loader.",
+  "description": "Texture packing config for `pano`, read from `packs.toml` in the current directory or from the path given to `--config`. Relative paths resolve against this file's directory and may not climb above it. Every libGDX TexturePacker setting, and the per-job `timeout`, may be set here at the root, on an atlas, or on a single variant; each key resolves variant → atlas → root → default independently. Unknown keys are ignored, matching the loader. See src/config.gleam for the loader.",
   "type": "object",
   "required": [
     "jar",
@@ -17,10 +17,15 @@
       "default": 8,
       "description": "Number of pack jobs (one atlas at one variant's scale) to run concurrently. Values below 1 are clamped to 1."
     },
+    "timeout": {
+      "type": "integer",
+      "default": 30000,
+      "minimum": 1,
+      "description": "Milliseconds a single pack job (one atlas at one variant's scale) may run for before its JVM is killed and the job is reported as failed. Must be at least 1. Atlases and variants may override it."
+    },
     "atlases": {
       "type": "object",
-      "minProperties": 1,
-      "description": "The atlas registry, keyed by atlas name. Must have at least one entry.",
+      "description": "The atlas registry, keyed by atlas name. Each key is one atlas to pack; an empty table packs nothing.",
       "additionalProperties": {
         "$ref": "#/definitions/atlas"
       }
@@ -237,7 +242,7 @@
   "definitions": {
     "atlas": {
       "type": "object",
-      "description": "One atlas to pack. Its table key is the atlas name, used as the output filename stem. Alongside `source_dir`/`target_dir`/`variants`, every libGDX TexturePacker setting is accepted here and forwarded verbatim to the packer; any key left out falls back to the root's value, then to its own default. A variant may override any of them for its own pass. `scale`/`scaleSuffix` (driven by variants), `outputFormat`/`jpegQuality` (pages are PNG end to end), `atlasExtension`/`legacyOutput`/`prettyPrint` (the `.atlas` parser reads the legacy format) and `ignore` are not exposed, because pano's pipeline depends on them.",
+      "description": "One atlas to pack. Its table key is the atlas name, used as the output filename stem (`<name>-<page>.png`, `<name>.json`). Alongside `source_dir`/`target_dir`/`variants`/`timeout`, every libGDX TexturePacker setting is accepted here and forwarded verbatim to the packer; any key left out falls back to the root's value, then to its own default. A variant may override any of them for its own pass. `scale`/`scaleSuffix` (driven by variants), `outputFormat`/`jpegQuality` (pages are PNG end to end), `atlasExtension`/`legacyOutput`/`prettyPrint` (the `.atlas` parser reads the legacy format) and `ignore` are not exposed, because pano's pipeline depends on them.",
       "required": [
         "source_dir",
         "target_dir"
@@ -250,6 +255,11 @@
         "target_dir": {
           "type": "string",
           "description": "Output root for this atlas. Relative paths resolve against this file's directory."
+        },
+        "timeout": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Milliseconds one pack job of this atlas may run for, overriding the root's `timeout`. Must be at least 1."
         },
         "variants": {
           "type": "object",
@@ -446,6 +456,11 @@
           "exclusiveMinimum": 0,
           "description": "Downscale factor forwarded to libGDX TexturePacker for this variant's pass, e.g. `0.5` for a half-size output. Accepted as an int or float TOML literal; the loader rejects only non-finite values."
         },
+        "timeout": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Milliseconds this pass may run for, overriding the atlas's `timeout`. Must be at least 1."
+        },
         "pot": {
           "type": "boolean",
           "description": "Pad output pages to power-of-two dimensions."
@@ -621,7 +636,7 @@
           ]
         }
       },
-      "description": "One scale pass. Its table key becomes the output subdirectory name. Any libGDX TexturePacker setting may be repeated here to override the value the enclosing atlas sets; keys left out fall through to the atlas, then the root, then the default."
+      "description": "One scale pass. Its table key becomes the output subdirectory name. `timeout` and any libGDX TexturePacker setting may be repeated here to override the value the enclosing atlas sets; keys left out fall through to the atlas, then the root, then the default."
     }
   }
 }
