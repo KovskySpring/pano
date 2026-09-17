@@ -1,4 +1,6 @@
-# pano - Multi-threaded wrapper for libGDX's TexturePacker, outputting to Phaser 3 multiatlas.json
+# pano - another Texture Packer for Phaser 3
+
+`pano` is a multi-threaded wrapper for libGDX's TexturePacker, outputting to Phaser 3 multiatlas.json
 
 ## Prerequisites
 
