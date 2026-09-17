@@ -8,6 +8,7 @@ import internal/compat/phaser
 import internal/path_utils
 import internal/pool
 import pack_config.{Settings}
+import simplifile
 
 pub fn main() -> Nil {
   gleeunit.main()
@@ -130,6 +131,63 @@ pub fn phaser_json_snapshot_test() {
   |> birdie.snap(title: "gdx atlas converted to phaser multiatlas json")
 }
 
+// --- paths --------------------------------------------------------------
+
+pub fn join_test() {
+  assert path_utils.join_and_resolve(path_utils.AbsolutePath("/a"), "b")
+    == Ok(path_utils.AbsolutePath("/a/b"))
+  // Exactly one separator, however the two halves are written.
+  assert path_utils.join_and_resolve(path_utils.AbsolutePath("/a/"), "b")
+    == Ok(path_utils.AbsolutePath("/a/b"))
+  // An absolute right-hand side wins outright, as does an empty base.
+  assert path_utils.join_and_resolve(path_utils.AbsolutePath("/a"), "/b")
+    == Ok(path_utils.AbsolutePath("/b"))
+  assert path_utils.join_and_resolve(path_utils.AbsolutePath("/"), "b")
+    == Ok(path_utils.AbsolutePath("/b"))
+}
+
+pub fn resolve_test() {
+  assert path_utils.join_and_resolve(path_utils.AbsolutePath("/a/b"), "c")
+    == Ok(path_utils.AbsolutePath("/a/b/c"))
+  assert path_utils.join_and_resolve(
+      path_utils.AbsolutePath("/a/b"),
+      "./c/../d",
+    )
+    == Ok(path_utils.AbsolutePath("/a/b/d"))
+  // An absolute path ignores the base entirely.
+  assert path_utils.join_and_resolve(path_utils.AbsolutePath("/a/b"), "/c")
+    == Ok(path_utils.AbsolutePath("/c"))
+  // Climbing above the filesystem root is the one failure, and it reports
+  // back the offending path.
+  assert path_utils.join_and_resolve(path_utils.AbsolutePath("/a"), "../../..")
+    == Error("../../..")
+}
+
+/// A relative base is itself taken from the current working directory.
+pub fn resolve_relative_base_test() {
+  let assert Ok(cwd) = simplifile.current_directory()
+
+  assert path_utils.join_and_resolve(path_utils.AbsolutePath("a"), "b")
+    == Ok(path_utils.AbsolutePath(cwd <> "/a/b"))
+  let assert Ok(our_cwd) = path_utils.resolve("")
+  assert path_utils.join_and_resolve(our_cwd, "b")
+    == Ok(path_utils.AbsolutePath(cwd <> "/b"))
+}
+
+pub fn base_dir_test() {
+  let assert Ok(cwd) = simplifile.current_directory()
+
+  assert path_utils.resolve_dirname("test/packs.toml")
+    == Ok(path_utils.AbsolutePath(cwd <> "/test"))
+  // No directory component means the current working directory.
+  assert path_utils.resolve_dirname("packs.toml")
+    == Ok(path_utils.AbsolutePath(cwd))
+  assert path_utils.resolve_dirname("/a/b/packs.toml")
+    == Ok(path_utils.AbsolutePath("/a/b"))
+  assert path_utils.resolve_dirname("/packs.toml")
+    == Ok(path_utils.AbsolutePath("/"))
+}
+
 // --- output naming ------------------------------------------------------------
 
 pub fn page_image_name_test() {
@@ -179,10 +237,14 @@ scale_factor = 0.5
 "
 
 pub fn config_parse_test() {
-  let assert Ok(parsed) = config.parse_config(sample_config, base_dir: "repo")
+  let assert Ok(parsed) =
+    config.parse_config(
+      sample_config,
+      base_dir: path_utils.AbsolutePath("/repo"),
+    )
 
   // Relative paths resolve against the config's directory; absolute don't.
-  assert parsed.jar == "repo/vendor/packer.jar"
+  assert parsed.jar.raw == "/repo/vendor/packer.jar"
   // Missing `concurrency` and `timeout` fall back to their defaults.
   assert parsed.concurrency == 8
   assert parsed.timeout == 30_000
@@ -192,8 +254,8 @@ pub fn config_parse_test() {
   assert default
     == Spec(
       name: "default-resources",
-      source_dir: "repo/art/default",
-      target_dir: "/absolute/textures",
+      source_dir: path_utils.AbsolutePath("/repo/art/default"),
+      target_dir: path_utils.AbsolutePath("/absolute/textures"),
       // Variants are sorted by name, and an int `scale_factor` widens to a
       // float. Neither variant overrides anything, so both inherit the
       // atlas's settings.
@@ -206,17 +268,32 @@ pub fn config_parse_test() {
     )
 
   assert brazil.name == "cities-resources-brazil"
-  assert brazil.source_dir == "repo/art/cities/brazil"
-  assert brazil.target_dir == "repo/textures"
+  assert brazil.source_dir.raw == "/repo/art/cities/brazil"
+  assert brazil.target_dir.raw == "/repo/textures"
   assert brazil.variants == [Variant("1x", 0.5, pack_config.default(), 30_000)]
 }
 
 /// An atlas without a `[atlases.<name>.variants.*]` table packs once at factor 1.0
 /// directly into `target_dir`, which `pack` represents as no variants at all.
+/// A relative `base_dir` is itself pinned to the current working directory, so
+/// `base_dir` on the parsed config is always absolute.
+pub fn config_relative_base_dir_test() {
+  let assert Ok(cwd) = simplifile.current_directory()
+  let text =
+    "jar = \"c\"\n[atlases.x]\nsource_dir = \"s\"\ntarget_dir = \"o\"\n"
+
+  let assert Ok(base_dir) = path_utils.resolve_dirname("repo/packs.toml")
+  let assert Ok(parsed) = config.parse_config(text, base_dir)
+
+  assert parsed.base_dir.raw == cwd <> "/repo"
+  assert parsed.jar.raw == cwd <> "/repo/c"
+}
+
 pub fn config_without_variants_test() {
   let text =
     "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n"
-  let assert Ok(parsed) = config.parse_config(text, base_dir: "/")
+  let assert Ok(parsed) =
+    config.parse_config(text, base_dir: path_utils.AbsolutePath("/"))
   let assert [atlas] = parsed.atlases
 
   assert atlas.variants == []
@@ -226,7 +303,8 @@ pub fn config_without_variants_test() {
 pub fn config_rounds_variant_factor_test() {
   let text =
     "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n[atlases.x.variants.1x]\nscale_factor = 0.3472\n"
-  let assert Ok(parsed) = config.parse_config(text, base_dir: "/")
+  let assert Ok(parsed) =
+    config.parse_config(text, base_dir: path_utils.AbsolutePath("/"))
   let assert [atlas] = parsed.atlases
   let assert [variant] = atlas.variants
 
@@ -236,21 +314,23 @@ pub fn config_rounds_variant_factor_test() {
 pub fn config_rejects_non_finite_factor_test() {
   let text =
     "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n[atlases.x.variants.1x]\nscale_factor = nan\n"
-  let assert Error(_) = config.parse_config(text, base_dir: "/")
+  let assert Error(_) =
+    config.parse_config(text, base_dir: path_utils.AbsolutePath("/"))
 }
 
 pub fn config_rejects_missing_jar_test() {
   let text = "[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n"
-  let assert Error(_) = config.parse_config(text, base_dir: "/")
+  let assert Error(_) =
+    config.parse_config(text, base_dir: path_utils.AbsolutePath("/"))
 }
 
 pub fn config_rejects_missing_atlas_key_test() {
   let text = "jar = \"c\"\n[atlases.x]\ntarget_dir = \"o\"\n"
-  let assert Error(_) = config.parse_config(text, base_dir: "/")
+  let assert Error(_) =
+    config.parse_config(text, base_dir: path_utils.AbsolutePath("/"))
 }
 
-/// `..` is resolved away while it has a parent segment to consume; a path that
-/// would climb above the config's own directory is rejected.
+/// `.` and `..` segments are resolved away against the config's own directory.
 pub fn config_path_traversal_test() {
   let cfg = fn(jar) {
     "jar = \""
@@ -259,11 +339,19 @@ pub fn config_path_traversal_test() {
   }
 
   let assert Ok(parsed) =
-    config.parse_config(cfg("../vendor/p.jar"), base_dir: "cfg")
-  assert parsed.jar == "vendor/p.jar"
+    config.parse_config(
+      cfg("./sub/../vendor/p.jar"),
+      base_dir: path_utils.AbsolutePath("/a/cfg"),
+    )
+  assert parsed.jar.raw == "/a/cfg/vendor/p.jar"
 
-  let assert Error(config.InvalidPath(_)) =
-    config.parse_config(cfg("../../vendor/p.jar"), base_dir: "cfg")
+  // Climbing out of the config's directory is allowed, up to the root.
+  let assert Ok(parsed) =
+    config.parse_config(
+      cfg("../../vendor/p.jar"),
+      base_dir: path_utils.AbsolutePath("/a/cfg"),
+    )
+  assert parsed.jar.raw == "/vendor/p.jar"
 }
 
 // --- config: libGDX settings -------------------------------------------
@@ -315,7 +403,10 @@ scale_resampling = \"nearest\"
 
 pub fn gdx_settings_override_test() {
   let assert Ok(parsed) =
-    config.parse_config(overridden_gdx_config, base_dir: "/")
+    config.parse_config(
+      overridden_gdx_config,
+      base_dir: path_utils.AbsolutePath("/"),
+    )
   let assert [atlas] = parsed.atlases
 
   assert atlas.gdx_settings
@@ -361,7 +452,8 @@ pub fn gdx_settings_override_test() {
 pub fn gdx_settings_partial_override_test() {
   let text =
     "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\nmax_width = 4096\n"
-  let assert Ok(parsed) = config.parse_config(text, base_dir: "/")
+  let assert Ok(parsed) =
+    config.parse_config(text, base_dir: path_utils.AbsolutePath("/"))
   let assert [atlas] = parsed.atlases
 
   assert atlas.gdx_settings
@@ -371,7 +463,8 @@ pub fn gdx_settings_partial_override_test() {
 pub fn gdx_settings_wrong_type_test() {
   let bad =
     "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\nalias = \"no\"\n"
-  let assert Error(_) = config.parse_config(bad, base_dir: "/")
+  let assert Error(_) =
+    config.parse_config(bad, base_dir: path_utils.AbsolutePath("/"))
 }
 
 /// A libGDX key in a variant wins over the atlas's, which wins over the
@@ -397,7 +490,11 @@ scale_factor = 1.0
 "
 
 pub fn gdx_settings_variant_override_test() {
-  let assert Ok(parsed) = config.parse_config(layered_gdx_config, base_dir: "/")
+  let assert Ok(parsed) =
+    config.parse_config(
+      layered_gdx_config,
+      base_dir: path_utils.AbsolutePath("/"),
+    )
   let assert [atlas] = parsed.atlases
   let assert [one_x, two_x] = atlas.variants
 
@@ -440,7 +537,8 @@ max_width = 1024
 "
 
 pub fn gdx_settings_root_override_test() {
-  let assert Ok(parsed) = config.parse_config(root_gdx_config, base_dir: "/")
+  let assert Ok(parsed) =
+    config.parse_config(root_gdx_config, base_dir: path_utils.AbsolutePath("/"))
   let assert [inherits, overrides] = parsed.atlases
 
   let root = Settings(..pack_config.default(), max_width: 4096, rotation: True)
@@ -461,14 +559,16 @@ pub fn gdx_settings_root_override_test() {
 pub fn gdx_settings_root_wrong_type_test() {
   let bad =
     "jar = \"c\"\nalias = \"no\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n"
-  let assert Error(_) = config.parse_config(bad, base_dir: "/")
+  let assert Error(_) =
+    config.parse_config(bad, base_dir: path_utils.AbsolutePath("/"))
 }
 
 /// A variant's libGDX keys are type-checked the same as an atlas's.
 pub fn gdx_settings_variant_wrong_type_test() {
   let bad =
     "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n[atlases.x.variants.1x]\nscale_factor = 0.5\nalias = \"no\"\n"
-  let assert Error(_) = config.parse_config(bad, base_dir: "/")
+  let assert Error(_) =
+    config.parse_config(bad, base_dir: path_utils.AbsolutePath("/"))
 }
 
 // --- config: the shipped packs.toml ------------------------------------
@@ -476,9 +576,13 @@ pub fn gdx_settings_variant_wrong_type_test() {
 pub fn shipped_config_test() {
   // `gleam test` runs from the package root, so the fixture's own directory
   // (`test/`) is what its relative paths resolve against.
+  let assert Ok(cwd) = simplifile.current_directory()
   let assert Ok(loaded) = config.load_config("test/packs.toml")
 
-  assert loaded.jar == "vendor/runnable-texturepacker.jar"
+  // Pack jobs run the packer from here, so `../` in the file lands where it
+  // reads as landing.
+  assert loaded.base_dir.raw == cwd <> "/test"
+  assert loaded.jar.raw == cwd <> "/vendor/runnable-texturepacker.jar"
   // 6 simple + 6 cities + 7 tournament themes.
   assert list.length(loaded.atlases) == 19
   assert loaded.concurrency == 8
@@ -506,7 +610,8 @@ pub fn shipped_config_test() {
     list.find(loaded.atlases, fn(atlas) {
       atlas.name == "cities-resources-germany"
     })
-  assert germany.source_dir == "assets/original/images/cities/germany"
+  assert germany.source_dir.raw
+    == cwd <> "/" <> "assets/original/images/cities/germany"
   assert germany.timeout == 300_000
   assert list.map(germany.variants, fn(variant) { variant.timeout })
     == [300_000, 300_000, 300_000]
@@ -554,7 +659,10 @@ target_dir = \"o\"
 
 pub fn config_timeout_layers_test() {
   let assert Ok(parsed) =
-    config.parse_config(layered_timeout_config, base_dir: "/")
+    config.parse_config(
+      layered_timeout_config,
+      base_dir: path_utils.AbsolutePath("/"),
+    )
   let assert [x, y] = parsed.atlases
   let assert [one_x, two_x] = x.variants
 
@@ -572,12 +680,12 @@ pub fn config_rejects_non_positive_timeout_test() {
   let text =
     "jar = \"c\"\ntimeout = 0\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n"
   let assert Error(config.InvalidTimeout(0)) =
-    config.parse_config(text, base_dir: "/")
+    config.parse_config(text, base_dir: path_utils.AbsolutePath("/"))
 
   let variant =
     "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n[atlases.x.variants.1x]\nscale_factor = 0.5\ntimeout = -1\n"
   let assert Error(config.InvalidTimeout(-1)) =
-    config.parse_config(variant, base_dir: "/")
+    config.parse_config(variant, base_dir: path_utils.AbsolutePath("/"))
 }
 
 // --- pool ---------------------------------------------------------------

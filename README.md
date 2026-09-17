@@ -1,23 +1,26 @@
-# pano - Phaser Pack N' Optimize
-
-Multi-threaded texture packer for Phaser 3,
-using libGDX's TexturePacker under the hood.
+# pano - Multi-threaded wrapper for libGDX's TexturePacker, outputting to Phaser 3 multiatlas.json
 
 ## Prerequisites
 
-- Erlang/OTP 27+ (for running the `pano` escript). The install script checks this; older releases are rejected.
-- A JVM (Java 8+) on `PATH` as `java` (for libGDX's TexturePacker). Checked before packing.
+- Erlang/OTP 27+ (for running the `pano` escript). The install script checks this.
+- A JVM (Java 8+) on `PATH` as `java` (for libGDX's TexturePacker).
 - `runnable-texturepacker.jar` (for libGDX's TexturePacker). See [libGDX's TexturePacker](https://libgdx.com/wiki/tools/texture-packer).
 
 ## Installation
+
+Run the install script to download the latest `pano` binaries and place it in `~/.local/bin/pano`
+(or `$PANO_BIN_DIR/pano` if you set that environment variable). The script checks for Erlang/OTP 27+
+and a JVM on `PATH`.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/KovskySpring/pano/main/scripts/install.sh | sh
 ```
 
-`pano` is a single escript, installed to `~/.local/bin/pano` (overridable with
-`PANO_BIN_DIR`). It is pure BEAM bytecode, so the same file runs on every OS
-and architecture.
+Or, download the latest release from [GitHub](https://github.com/KovskySpring/pano/releases),
+place it wherever you'd like to.
+
+`pano` is a single escript with BEAM bytecode, as long as you have an `erlang` runtime installed,
+it will run on any platform (Linux, macOS, Windows).
 
 ## Usage
 
@@ -26,8 +29,12 @@ All configuration lives in a `packs.toml` file.
 ```sh
 # pack every atlas in ./packs.toml
 pano
+
 # explicit config location
 pano --config=path/to/packs.toml
+
+# view the help message
+pano --help
 ```
 
 Because `pano` uses libGDX's TexturePacker standalone jar,
@@ -46,9 +53,8 @@ Review a changed snapshot with `gleam run -m birdie`.
 ## packs.toml
 
 All configuration lives in a single `packs.toml` file.
-Relative paths in the file always resolve against the directory that contains it,
-and may not climb above it — `../` is rejected when there is no parent segment left
-to consume.
+Relative paths in the file always resolve against the directory that contains it.
+TexturePacker itself is run from that directory too.
 
 ### Editor intellisense
 
@@ -58,10 +64,10 @@ and validation.
 
 ### Top-level keys
 
-| Key           | Type   | Required | Default | Description                                                                |
-| ------------- | ------ | -------- | ------- | -------------------------------------------------------------------------- |
-| `jar`         | string | ✓        | -       | Path to the runnable `texturepacker.jar`.                                  |
-| `concurrency` | int    |          | `8`     | Maximum number of pack jobs run in parallel. Values below 1 are clamped to 1. |
+| Key           | Type   | Required | Default | Description                                                                                                |
+| ------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------------------------- |
+| `jar`         | string | ✓        | -       | Path to the runnable `texturepacker.jar`.                                                                  |
+| `concurrency` | int    |          | `8`     | Maximum number of pack jobs run in parallel. Values below 1 are clamped to 1.                              |
 | `timeout`     | int    |          | `30000` | Milliseconds a single pack job may run for before it is killed and reported as failed. Must be at least 1. |
 
 Any [libGDX setting](#libgdx-settings) may also sit here, applying to every atlas.
@@ -75,10 +81,10 @@ Unknown keys are ignored.
 Each `[atlases.<name>]` table defines one atlas to pack. The `<name>` key is the atlas
 name, used as the base filename for all outputs (`<name>.json`, `<name>-0.png`, `<name>-1.png`, …).
 
-| Key          | Type   | Required | Default | Description                                     |
-| ------------ | ------ | -------- | ------- | ------------------------------------------------- |
-| `source_dir` | string | ✓        | -       | Directory containing the source images to pack. |
-| `target_dir` | string | ✓        | -       | Root output directory for this atlas.           |
+| Key          | Type   | Required | Default | Description                                                              |
+| ------------ | ------ | -------- | ------- | ------------------------------------------------------------------------ |
+| `source_dir` | string | ✓        | -       | Directory containing the source images to pack.                          |
+| `target_dir` | string | ✓        | -       | Root output directory for this atlas.                                    |
 | `timeout`    | int    |          | root's  | Milliseconds one pack job of this atlas may run for. Must be at least 1. |
 
 ### Job timeouts
@@ -104,11 +110,11 @@ wedged somewhere other than the packer is abandoned a few seconds later.
 Every key below is optional and maps to a libGDX TexturePacker setting forwarded
 verbatim to the packer. They are written as plain keys in one of three places:
 
-| Where                                  | Applies to                  |
-| -------------------------------------- | --------------------------- |
-| the root of the file                   | every atlas                 |
-| `[atlases.<name>]`                     | one atlas                   |
-| `[atlases.<name>.variants.<variant>]`  | one atlas at one scale pass |
+| Where                                 | Applies to                  |
+| ------------------------------------- | --------------------------- |
+| the root of the file                  | every atlas                 |
+| `[atlases.<name>]`                    | one atlas                   |
+| `[atlases.<name>.variants.<variant>]` | one atlas at one scale pass |
 
 Each key resolves independently, so an atlas that overrides `max_width` still inherits
 the root's `rotation`:
@@ -156,10 +162,10 @@ The `Default` column below is what a key resolves to when no layer sets it.
 | `grid`                   | bool   | `false`         | Place sprites in a uniform grid, in order, instead of bin packing.               |
 | `scale_resampling`       | string | `"bicubic"`     | Resampling algorithm used when downscaling (`bicubic`, `bilinear`, `nearest`).   |
 
-Not exposed, because pano's pipeline depends on them: `scale`/`scaleSuffix` (driven by
-the variants table), `outputFormat`/`jpegQuality` (pages are PNG end to end),
-`atlasExtension`/`legacyOutput`/`prettyPrint` (the `.atlas` parser reads the legacy format)
-and `ignore` (skips the whole source directory when set at the root).
+Note: The properties `scale` and `scaleSuffix` from GDX's Texture Packer are managed by `pano`'s
+atlas variants so they are not exposed. `outputFormat` and `jpegQuality` are not supported yet.
+`atlasExtension`, `legacyOutput`, `prettyPrint` are hidden because `pano` will always reads the
+legacy format and writes to Phaser's multiatlas format.
 
 ### `[atlases.<name>.variants.<variant>]`
 
@@ -169,10 +175,10 @@ When variants are present each one writes into `<target_dir>/<variant>/`.
 
 The `<variant>` key is arbitrary and becomes the subdirectory name (e.g. `1x`, `2x`).
 
-| Key            | Type   | Required | Description                                                                                          |
-| -------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------- |
+| Key            | Type   | Required | Description                                                                                                                 |
+| -------------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `scale_factor` | number | ✓        | Scale factor applied to the source images for this pass (e.g. `0.5` for half-size). Int or float; `inf`/`nan` are rejected. |
-| `timeout`      | int    |          | Milliseconds this pass may run for, overriding the atlas's. Must be at least 1.                      |
+| `timeout`      | int    |          | Milliseconds this pass may run for, overriding the atlas's. Must be at least 1.                                             |
 
 Any [libGDX setting](#libgdx-settings) may also be listed here to override the atlas's
 value for this pass only. Useful when a downscaled variant needs different limits, e.g.

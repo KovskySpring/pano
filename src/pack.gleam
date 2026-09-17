@@ -26,7 +26,7 @@ type Job {
     label: String,
     factor: Float,
     settings: Settings,
-    out_dir: String,
+    out_dir: path_utils.AbsolutePath,
     timeout: Int,
   )
 }
@@ -64,8 +64,8 @@ fn run_job(job: Job, config: Config) -> snag.Result(Nil) {
 fn write(
   name: String,
   pages: List(Page),
-  from pack_dir: String,
-  to out_dir: String,
+  from pack_dir: path_utils.AbsolutePath,
+  to out_dir: path_utils.AbsolutePath,
   scale scale: Float,
 ) -> snag.Result(Nil) {
   let named =
@@ -73,20 +73,34 @@ fn write(
       #(path_utils.page_image_filename(name, index), page)
     })
 
-  use _ <- result.try(
-    list.try_each(named, fn(entry) {
-      let #(image, page) = entry
-      let from = filepath.join(pack_dir, page.image)
-      let to = filepath.join(out_dir, image)
-      simplifile.copy_file(at: from, to: to)
-      |> file_utils.with_snag_error(context: "copying " <> from <> " to " <> to)
-    }),
-  )
+  use _ <- result.try(write_pages(named, pack_dir, name, out_dir))
 
-  let json = filepath.join(out_dir, path_utils.atlas_json_filename(name))
+  let json = filepath.join(out_dir.raw, path_utils.atlas_json_filename(name))
 
   simplifile.write(json, phaser.encode(named, scale))
   |> file_utils.with_snag_error(context: "writing " <> json)
+}
+
+fn write_pages(
+  entries: List(#(String, Page)),
+  pack_dir: path_utils.AbsolutePath,
+  name: String,
+  out_dir: path_utils.AbsolutePath,
+) -> Result(Nil, snag.Snag) {
+  use entry <- list.try_each(entries)
+  let #(image, page) = entry
+
+  let from_outcome =
+    path_utils.join_and_resolve(pack_dir, page.image)
+    |> snag.map_error(fn(error) { "could not resolve packed page " <> error })
+    |> snag.context("writing pack outputs for " <> name)
+
+  use from <- result.try(from_outcome)
+
+  let to = filepath.join(out_dir.raw, image)
+
+  simplifile.copy_file(at: from.raw, to: to)
+  |> file_utils.with_snag_error(context: "copying " <> from.raw <> " to " <> to)
 }
 
 fn run_packer(job: Job, arguments: List(String)) -> snag.Result(Nil) {
@@ -126,23 +140,29 @@ fn run_packer(job: Job, arguments: List(String)) -> snag.Result(Nil) {
 fn pack_in_scratch(
   job: Job,
   config: Config,
-  scratch: String,
+  unresolved_scratch: String,
 ) -> snag.Result(Nil) {
+  use scratch <- result.try(
+    path_utils.resolve(unresolved_scratch)
+    |> result.map_error(fn(error) {
+      snag.new("could not resolve temp dir " <> error)
+    }),
+  )
+
   let atlas = job.spec
 
-  let source_dir = atlas.source_dir
-
   use source_exists <- result.try({
-    simplifile.is_directory(source_dir)
-    |> file_utils.with_snag_error(context: "checking " <> source_dir)
+    simplifile.is_directory(atlas.source_dir.raw)
+    |> file_utils.with_snag_error(context: "checking " <> atlas.source_dir.raw)
   })
 
   use _ <- result.try(case source_exists {
     True -> Ok(Nil)
-    False -> snag.error("source dir " <> source_dir <> " does not exist")
+    False ->
+      snag.error("source dir " <> atlas.source_dir.raw <> " does not exist")
   })
 
-  let settings_path = filepath.join(scratch, "pack.json")
+  let settings_path = filepath.join(scratch.raw, "pack.json")
 
   use _ <- result.try({
     simplifile.write(
@@ -154,11 +174,11 @@ fn pack_in_scratch(
     )
   })
 
-  let pack_dir = filepath.join(scratch, "out")
+  let pack_dir = path_utils.AbsolutePath(filepath.join(scratch.raw, "out"))
 
   use _ <- result.try({
-    simplifile.create_directory_all(pack_dir)
-    |> file_utils.with_snag_error(context: "creating pack dir " <> pack_dir)
+    simplifile.create_directory_all(pack_dir.raw)
+    |> file_utils.with_snag_error(context: "creating pack dir " <> pack_dir.raw)
   })
 
   // `-Djava.awt.headless=true` stops the JVM from initializing macOS AppKit
@@ -168,15 +188,15 @@ fn pack_in_scratch(
     run_packer(job, [
       "-Djava.awt.headless=true",
       "-jar",
-      config.jar,
-      source_dir,
-      pack_dir,
+      config.jar.raw,
+      atlas.source_dir.raw,
+      pack_dir.raw,
       atlas.name,
       settings_path,
     ]),
   )
 
-  let atlas_path = filepath.join(pack_dir, atlas.name <> ".atlas")
+  let atlas_path = filepath.join(pack_dir.raw, atlas.name <> ".atlas")
 
   use atlas_text <- result.try({
     simplifile.read(atlas_path)
@@ -188,8 +208,8 @@ fn pack_in_scratch(
   )
 
   use _ <- result.try({
-    simplifile.create_directory_all(job.out_dir)
-    |> file_utils.with_snag_error(context: "creating " <> job.out_dir)
+    simplifile.create_directory_all(job.out_dir.raw)
+    |> file_utils.with_snag_error(context: "creating " <> job.out_dir.raw)
   })
 
   use _ <- result.try(write(
@@ -245,7 +265,10 @@ pub fn pack(config: Config) -> snag.Result(Nil) {
               label: v.name,
               factor: v.scale_factor,
               settings: v.gdx_settings,
-              out_dir: filepath.join(atlas.target_dir, v.name),
+              out_dir: path_utils.AbsolutePath(filepath.join(
+                atlas.target_dir.raw,
+                v.name,
+              )),
               timeout: v.timeout,
             )
           })

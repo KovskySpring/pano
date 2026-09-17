@@ -1,4 +1,3 @@
-import filepath
 import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
@@ -21,8 +20,8 @@ pub type Atlas {
   /// `timeout` is in milliseconds
   Spec(
     name: String,
-    source_dir: String,
-    target_dir: String,
+    source_dir: path_utils.AbsolutePath,
+    target_dir: path_utils.AbsolutePath,
     variants: List(Variant),
     gdx_settings: Settings,
     timeout: Int,
@@ -40,7 +39,8 @@ pub type Variant {
 
 pub type Config {
   Config(
-    jar: String,
+    base_dir: path_utils.AbsolutePath,
+    jar: path_utils.AbsolutePath,
     concurrency: Int,
     atlases: List(Atlas),
     gdx_settings: Settings,
@@ -49,7 +49,7 @@ pub type Config {
 }
 
 pub type ParseError {
-  InvalidPath(String)
+  PathError(String)
   InvalidNumber(tom.Number)
   InvalidTimeout(Int)
   InvalidToml(tom.ParseError)
@@ -327,7 +327,7 @@ fn get_gdx_settings(
 
 fn get_atlas(
   entry: #(String, Toml),
-  base_dir: String,
+  base_dir: path_utils.AbsolutePath,
   root_settings: Settings,
   root_timeout: Int,
 ) -> Result(Atlas, ParseError) {
@@ -343,8 +343,8 @@ fn get_atlas(
   )
 
   use source_dir <- result.try(
-    path_utils.resolve(base_dir, source_dir_path)
-    |> result.map_error(InvalidPath),
+    path_utils.join_and_resolve(base_dir, source_dir_path)
+    |> result.map_error(PathError),
   )
 
   use target_dir_path <- result.try(
@@ -353,8 +353,8 @@ fn get_atlas(
   )
 
   use target_dir <- result.try(
-    path_utils.resolve(base_dir, target_dir_path)
-    |> result.map_error(InvalidPath),
+    path_utils.join_and_resolve(base_dir, target_dir_path)
+    |> result.map_error(PathError),
   )
 
   use gdx_settings <- result.try(get_gdx_settings(table, root_settings))
@@ -376,7 +376,7 @@ fn get_atlas(
 
 fn get_atlases(
   doc: Dict(String, Toml),
-  base_dir: String,
+  base_dir: path_utils.AbsolutePath,
   root_settings: Settings,
   root_timeout: Int,
 ) -> Result(List(Atlas), ParseError) {
@@ -397,7 +397,7 @@ fn get_atlases(
 
 pub fn parse_config(
   text: String,
-  base_dir base_dir: String,
+  base_dir base_dir: path_utils.AbsolutePath,
 ) -> Result(Config, ParseError) {
   use doc <- result.try(
     tom.parse(text)
@@ -410,8 +410,8 @@ pub fn parse_config(
   )
 
   use jar <- result.try(
-    path_utils.resolve(base_dir, jar_path)
-    |> result.map_error(InvalidPath),
+    path_utils.join_and_resolve(base_dir, jar_path)
+    |> result.map_error(PathError),
   )
 
   use concurrency <- result.try(case tom.get_int(doc, ["concurrency"]) {
@@ -426,18 +426,23 @@ pub fn parse_config(
 
   use atlases <- result.try(get_atlases(doc, base_dir, gdx_settings, timeout))
 
-  Ok(Config(jar:, concurrency:, atlases:, gdx_settings:, timeout:))
+  Ok(Config(base_dir:, jar:, concurrency:, atlases:, gdx_settings:, timeout:))
 }
 
 pub fn load_config(path: String) -> Result(Config, ParseError) {
+  use base_dir <- result.try(
+    path_utils.resolve_dirname(path)
+    |> result.map_error(PathError),
+  )
+
   simplifile.read(path)
   |> result.map_error(FileError)
-  |> result.try(parse_config(_, base_dir: filepath.directory_name(path)))
+  |> result.try(parse_config(_, base_dir:))
 }
 
 pub fn describe_parse_error(error: ParseError) -> String {
   case error {
-    InvalidPath(path) -> "invalid path: " <> path
+    PathError(path) -> "invalid path: " <> path
     InvalidNumber(number) ->
       "invalid number: " <> number_utils.tom_number_to_string(number)
     InvalidTimeout(milliseconds) ->
