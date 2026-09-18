@@ -12,6 +12,10 @@
       "type": "string",
       "description": "Path to the libGDX runnable TexturePacker jar. Relative paths resolve against this file's directory."
     },
+    "target_dir": {
+      "type": "string",
+      "description": "Shared output root for every atlas that does not set its own `target_dir`; such an atlas writes to `<target_dir>/<atlas name>/`. An atlas that sets its own uses it as-is, without the atlas name appended. Relative paths resolve against this file's directory. An atlas with neither this nor its own `target_dir` is an error."
+    },
     "concurrency": {
       "type": "integer",
       "default": 8,
@@ -244,8 +248,7 @@
       "type": "object",
       "description": "One atlas to pack. Its table key is the atlas name, used as the output filename stem (`<name>-<page>.png`, `<name>.json`). Alongside `source_dir`/`target_dir`/`variants`/`timeout`, every libGDX TexturePacker setting is accepted here and forwarded verbatim to the packer; any key left out falls back to the root's value, then to its own default. A variant may override any of them for its own pass. `scale`/`scaleSuffix` (driven by variants), `outputFormat`/`jpegQuality` (pages are PNG end to end), `atlasExtension`/`legacyOutput`/`prettyPrint` (the `.atlas` parser reads the legacy format) and `ignore` are not exposed, because pano's pipeline depends on them.",
       "required": [
-        "source_dir",
-        "target_dir"
+        "source_dir"
       ],
       "properties": {
         "source_dir": {
@@ -254,7 +257,7 @@
         },
         "target_dir": {
           "type": "string",
-          "description": "Output root for this atlas. Relative paths resolve against this file's directory."
+          "description": "Output root for this atlas, used as-is without the atlas name appended. Relative paths resolve against this file's directory. Omit it to write to `<root target_dir>/<atlas name>/` instead; omitting both is an error."
         },
         "timeout": {
           "type": "integer",
@@ -264,7 +267,7 @@
         "variants": {
           "type": "object",
           "default": {},
-          "description": "Named scale passes. Absent/empty means pack once at factor 1.0, writing directly into `target_dir`. Otherwise each variant writes to `<target_dir>/<variant name>/`.",
+          "description": "Named scale passes. Absent/empty means pack once at factor 1.0, writing directly into the atlas's output root. Otherwise each variant writes to `<output root>/<variant name>/`.",
           "additionalProperties": {
             "$ref": "#/definitions/variant"
           }

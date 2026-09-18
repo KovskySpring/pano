@@ -69,6 +69,7 @@ and validation.
 | Key           | Type   | Required | Default | Description                                                                                                |
 | ------------- | ------ | -------- | ------- | ---------------------------------------------------------------------------------------------------------- |
 | `jar`         | string | ✓        | -       | Path to the runnable `texturepacker.jar`.                                                                  |
+| `target_dir`  | string |          | -       | Shared output root. Every atlas that omits its own `target_dir` writes to `<target_dir>/<atlas name>/`.    |
 | `concurrency` | int    |          | `8`     | Maximum number of pack jobs run in parallel. Values below 1 are clamped to 1.                              |
 | `timeout`     | int    |          | `30000` | Milliseconds a single pack job may run for before it is killed and reported as failed. Must be at least 1. |
 
@@ -83,11 +84,26 @@ Unknown keys are ignored.
 Each `[atlases.<name>]` table defines one atlas to pack. The `<name>` key is the atlas
 name, used as the base filename for all outputs (`<name>.json`, `<name>-0.png`, `<name>-1.png`, …).
 
-| Key          | Type   | Required | Default | Description                                                              |
-| ------------ | ------ | -------- | ------- | ------------------------------------------------------------------------ |
-| `source_dir` | string | ✓        | -       | Directory containing the source images to pack.                          |
-| `target_dir` | string | ✓        | -       | Root output directory for this atlas.                                    |
-| `timeout`    | int    |          | root's  | Milliseconds one pack job of this atlas may run for. Must be at least 1. |
+| Key          | Type   | Required | Default             | Description                                                              |
+| ------------ | ------ | -------- | ------------------- | ------------------------------------------------------------------------ |
+| `source_dir` | string | ✓        | -                   | Directory containing the source images to pack.                          |
+| `target_dir` | string |          | root's + `<name>`   | Root output directory for this atlas.                                    |
+| `timeout`    | int    |          | root's              | Milliseconds one pack job of this atlas may run for. Must be at least 1. |
+
+### Output directories
+
+An atlas writes to its own `target_dir` when it declares one, and to
+`<root target_dir>/<atlas name>/` when it does not:
+
+| Root `target_dir` | Atlas `target_dir` | Output root                    |
+| ----------------- | ------------------ | ------------------------------ |
+| `assets/textures` | -                  | `assets/textures/<atlas name>` |
+| `assets/textures` | `assets/ui`        | `assets/ui`                    |
+| -                 | `assets/ui`        | `assets/ui`                    |
+| -                 | -                  | error                          |
+
+The atlas name is only appended to the root's `target_dir`, never to the atlas's own.
+Declaring neither is an error, since the atlas has nowhere to write to.
 
 ### Job timeouts
 
@@ -172,8 +188,9 @@ legacy format and writes to Phaser's multiatlas format.
 ### `[atlases.<name>.variants.<variant>]`
 
 Variants produce one scaled output per entry.
-When no variants are declared the atlas is packed once at factor `1.0` directly into `target_dir`.
-When variants are present each one writes into `<target_dir>/<variant>/`.
+When no variants are declared the atlas is packed once at factor `1.0` directly into its
+[output root](#output-directories). When variants are present each one writes into
+`<output root>/<variant>/`.
 
 The `<variant>` key is arbitrary and becomes the subdirectory name (e.g. `1x`, `2x`).
 
@@ -190,6 +207,7 @@ a smaller `max_width` or more `bleed_iterations`.
 
 ```toml
 jar = "vendor/runnable-texturepacker.jar"
+target_dir  = "assets/textures"   # shared output root for atlases without their own
 concurrency = 4
 timeout     = 120_000
 
@@ -199,7 +217,7 @@ rotation         = true
 
 [atlases.ui-resources]
 source_dir = "assets/images/ui"
-target_dir = "assets/textures"
+# No `target_dir`, so this atlas writes to `assets/textures/ui-resources/`
 
 # Overrides for this atlas; `bleed_iterations` and `rotation` still come from the root
 max_width  = 4096
@@ -213,22 +231,31 @@ max_height = 2048
 
 [atlases.ui-resources.variants.2x]
 scale_factor = 1.0  # inherits the atlas's settings whole
+
+[atlases.hud-resources]
+source_dir = "assets/images/hud"
+target_dir = "assets/hud"   # its own root, so the atlas name is not appended
 ```
 
 Output layout for the example above:
 
 ```
 assets/textures/
-  1x/
-    ui-resources-0.png          # half-size pages
-    ui-resources.json           # Phaser multiatlas descriptor
-  2x/
-    ui-resources-0.png          # full-size pages
-    ui-resources.json
+  ui-resources/
+    1x/
+      ui-resources-0.png        # half-size pages
+      ui-resources.json         # Phaser multiatlas descriptor
+    2x/
+      ui-resources-0.png        # full-size pages
+      ui-resources.json
+assets/hud/
+  hud-resources-0.png           # no variants, so written straight into the root
+  hud-resources.json
 ```
 
 Drop the `[atlases.<name>.variants.*]` tables and the atlas is packed once at factor `1.0`,
-writing `ui-resources-0.png` and `ui-resources.json` straight into `assets/textures/`.
+writing `ui-resources-0.png` and `ui-resources.json` straight into
+`assets/textures/ui-resources/`.
 
 ## License
 

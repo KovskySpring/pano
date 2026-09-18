@@ -3,6 +3,11 @@
 # within it (`..` may not climb above the config's own directory).
 
 jar = "../vendor/runnable-texturepacker.jar"
+
+# Shared output root: every atlas below omits its own `target_dir`, so each one
+# writes to `../assets/textures/<atlas name>/`.
+target_dir = "../assets/textures"
+
 concurrency = 8
 timeout = 120_000
 
@@ -14,7 +19,6 @@ bleed_iterations = 4
 
 [atlases.default-resources]
 source_dir = "../assets/original/images/default"
-target_dir = "../assets/textures"
 
 [atlases.default-resources.variants.1x]
 scale_factor = 0.3472
@@ -27,7 +31,6 @@ scale_factor = 1.0
 
 [atlases.effects-resources]
 source_dir = "../assets/original/images/effects"
-target_dir = "../assets/textures"
 
 [atlases.effects-resources.variants.1x]
 scale_factor = 0.3472
@@ -40,7 +43,6 @@ scale_factor = 1.0
 
 [atlases.gameplay-resources]
 source_dir = "../assets/original/images/gameplay"
-target_dir = "../assets/textures"
 
 [atlases.gameplay-resources.variants.1x]
 scale_factor = 0.3472
@@ -53,7 +55,6 @@ scale_factor = 1.0
 
 [atlases.gameplay-pwf-resources]
 source_dir = "../assets/original/images/gameplay-pwf"
-target_dir = "../assets/textures"
 
 [atlases.gameplay-pwf-resources.variants.1x]
 scale_factor = 0.3472
@@ -66,7 +67,6 @@ scale_factor = 1.0
 
 [atlases.social-resources]
 source_dir = "../assets/original/images/social"
-target_dir = "../assets/textures"
 
 [atlases.social-resources.variants.1x]
 scale_factor = 0.3472
@@ -79,7 +79,6 @@ scale_factor = 1.0
 
 [atlases.animation-resources]
 source_dir = "../assets/original/images/animations"
-target_dir = "../assets/textures"
 
 [atlases.animation-resources.variants.1x]
 scale_factor = 0.3472
@@ -94,7 +93,6 @@ scale_factor = 1.0
 
 [atlases.cities-resources-brazil]
 source_dir = "../assets/original/images/cities/brazil"
-target_dir = "../assets/textures"
 
 [atlases.cities-resources-brazil.variants.1x]
 scale_factor = 0.3472
@@ -107,7 +105,6 @@ scale_factor = 1.0
 
 [atlases.cities-resources-coming-soon]
 source_dir = "../assets/original/images/cities/coming-soon"
-target_dir = "../assets/textures"
 
 [atlases.cities-resources-coming-soon.variants.1x]
 scale_factor = 0.3472
@@ -120,7 +117,6 @@ scale_factor = 1.0
 
 [atlases.cities-resources-france]
 source_dir = "../assets/original/images/cities/france"
-target_dir = "../assets/textures"
 
 [atlases.cities-resources-france.variants.1x]
 scale_factor = 0.3472
@@ -133,7 +129,6 @@ scale_factor = 1.0
 
 [atlases.cities-resources-germany]
 source_dir = "../assets/original/images/cities/germany"
-target_dir = "../assets/textures"
 max_width = 2048
 timeout = 300_000
 
@@ -149,7 +144,6 @@ scale_factor = 1.0
 
 [atlases.cities-resources-italy]
 source_dir = "../assets/original/images/cities/italy"
-target_dir = "../assets/textures"
 
 [atlases.cities-resources-italy.variants.1x]
 scale_factor = 0.3472
@@ -162,7 +156,6 @@ scale_factor = 1.0
 
 [atlases.cities-resources-japan]
 source_dir = "../assets/original/images/cities/japan"
-target_dir = "../assets/textures"
 
 [atlases.cities-resources-japan.variants.1x]
 scale_factor = 0.3472
@@ -177,7 +170,6 @@ scale_factor = 1.0
 
 [atlases.tournament-theme-easter]
 source_dir = "../assets/original/images/tournament-themes/easter"
-target_dir = "../assets/textures"
 
 [atlases.tournament-theme-easter.variants.1x]
 scale_factor = 0.3472
@@ -190,7 +182,6 @@ scale_factor = 1.0
 
 [atlases.tournament-theme-halloween]
 source_dir = "../assets/original/images/tournament-themes/halloween"
-target_dir = "../assets/textures"
 
 [atlases.tournament-theme-halloween.variants.1x]
 scale_factor = 0.3472
@@ -203,7 +194,6 @@ scale_factor = 1.0
 
 [atlases.tournament-theme-new_year]
 source_dir = "../assets/original/images/tournament-themes/new_year"
-target_dir = "../assets/textures"
 
 [atlases.tournament-theme-new_year.variants.1x]
 scale_factor = 0.3472
@@ -216,7 +206,6 @@ scale_factor = 1.0
 
 [atlases.tournament-theme-summer]
 source_dir = "../assets/original/images/tournament-themes/summer"
-target_dir = "../assets/textures"
 
 [atlases.tournament-theme-summer.variants.1x]
 scale_factor = 0.3472
@@ -229,7 +218,6 @@ scale_factor = 1.0
 
 [atlases.tournament-theme-summer_alt_1]
 source_dir = "../assets/original/images/tournament-themes/summer_alt_1"
-target_dir = "../assets/textures"
 
 [atlases.tournament-theme-summer_alt_1.variants.1x]
 scale_factor = 0.3472
@@ -242,7 +230,6 @@ scale_factor = 1.0
 
 [atlases.tournament-theme-valentine]
 source_dir = "../assets/original/images/tournament-themes/valentine"
-target_dir = "../assets/textures"
 
 [atlases.tournament-theme-valentine.variants.1x]
 scale_factor = 0.3472
@@ -255,7 +242,6 @@ scale_factor = 1.0
 
 [atlases.tournament-theme-winter]
 source_dir = "../assets/original/images/tournament-themes/winter"
-target_dir = "../assets/textures"
 
 [atlases.tournament-theme-winter.variants.1x]
 scale_factor = 0.3472

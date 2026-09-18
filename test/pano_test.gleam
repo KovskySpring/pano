@@ -2,6 +2,7 @@ import birdie
 import config.{Spec, Variant}
 import gleam/erlang/process
 import gleam/list
+import gleam/option
 import gleeunit
 import internal/compat/gdx
 import internal/compat/phaser
@@ -271,6 +272,44 @@ pub fn config_parse_test() {
   assert brazil.source_dir.raw == "/repo/art/cities/brazil"
   assert brazil.target_dir.raw == "/repo/textures"
   assert brazil.variants == [Variant("1x", 0.5, pack_config.default(), 30_000)]
+}
+
+/// An atlas that declares no `target_dir` of its own is packed under the root
+/// `target_dir`, in a subdirectory named after the atlas. One that declares its own
+/// uses it as-is, without the atlas name appended.
+pub fn config_root_target_dir_test() {
+  let text =
+    "jar = \"c\"\ntarget_dir = \"assets/textures\"\n"
+    <> "[atlases.a]\nsource_dir = \"art/a\"\n"
+    <> "[atlases.b]\nsource_dir = \"art/b\"\ntarget_dir = \"elsewhere\"\n"
+
+  let assert Ok(parsed) =
+    config.parse_config(text, base_dir: path_utils.AbsolutePath("/repo"))
+
+  assert parsed.target_dir
+    == option.Some(path_utils.AbsolutePath("/repo/assets/textures"))
+
+  let assert [a, b] = parsed.atlases
+  assert a.target_dir.raw == "/repo/assets/textures/a"
+  assert b.target_dir.raw == "/repo/elsewhere"
+}
+
+/// With no root `target_dir` to fall back to, an atlas must declare its own.
+pub fn config_rejects_missing_target_dir_test() {
+  let text = "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\n"
+  let assert Error(error) =
+    config.parse_config(text, base_dir: path_utils.AbsolutePath("/"))
+
+  assert error == config.MissingTargetDir("x")
+}
+
+pub fn config_without_root_target_dir_test() {
+  let text =
+    "jar = \"c\"\n[atlases.x]\nsource_dir = \"x\"\ntarget_dir = \"o\"\n"
+  let assert Ok(parsed) =
+    config.parse_config(text, base_dir: path_utils.AbsolutePath("/"))
+
+  assert parsed.target_dir == option.None
 }
 
 /// An atlas without a `[atlases.<name>.variants.*]` table packs once at factor 1.0
@@ -605,6 +644,11 @@ pub fn shipped_config_test() {
     list.find(loaded.atlases, fn(atlas) { atlas.name == "default-resources" })
   assert default_resources.gdx_settings == root
   assert default_resources.timeout == 120_000
+  // No atlas declares a `target_dir`, so each one hangs off the root's.
+  assert loaded.target_dir
+    == option.Some(path_utils.AbsolutePath(cwd <> "/assets/textures"))
+  assert default_resources.target_dir.raw
+    == cwd <> "/assets/textures/default-resources"
 
   let assert Ok(germany) =
     list.find(loaded.atlases, fn(atlas) {

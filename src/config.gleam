@@ -1,6 +1,7 @@
 import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import internal/number_utils
@@ -13,9 +14,11 @@ import tom.{type Toml}
 pub type Atlas {
   /// The Atlas config
   ///
-  /// Note: `target_dir` is the root output directory for this atlas; each variant will
-  /// be packed into a subdirectory of this directory, named after the variant. If
-  /// `variants` is empty, the atlas will be packed directly into `target_dir`.
+  /// Note: `target_dir` is the resolved root output directory for this atlas. It is
+  /// either the atlas's own `target_dir`, or the root `target_dir` with the atlas
+  /// name appended when the atlas does not declare one. Each variant will be packed
+  /// into a subdirectory of it, named after the variant. If `variants` is empty, the
+  /// atlas will be packed directly into `target_dir`.
   ///
   /// `timeout` is in milliseconds
   Spec(
@@ -38,9 +41,12 @@ pub type Variant {
 }
 
 pub type Config {
+  /// Note: `target_dir` is the shared output root every atlas that omits its own
+  /// `target_dir` is packed under, at `target_dir/<atlas name>`.
   Config(
     base_dir: path_utils.AbsolutePath,
     jar: path_utils.AbsolutePath,
+    target_dir: Option(path_utils.AbsolutePath),
     concurrency: Int,
     atlases: List(Atlas),
     gdx_settings: Settings,
@@ -50,6 +56,7 @@ pub type Config {
 
 pub type ParseError {
   PathError(String)
+  MissingTargetDir(String)
   InvalidNumber(tom.Number)
   InvalidTimeout(Int)
   InvalidToml(tom.ParseError)
@@ -325,9 +332,34 @@ fn get_gdx_settings(
   |> result.map_error(GetError)
 }
 
+/// The output root for one atlas: its own `target_dir` when it declares one, and
+/// otherwise the root `target_dir` with the atlas name appended. An atlas that
+/// declares neither has nowhere to write to.
+fn get_atlas_target_dir(
+  table: Dict(String, Toml),
+  name: String,
+  base_dir: path_utils.AbsolutePath,
+  root_target_dir: Option(path_utils.AbsolutePath),
+) -> Result(path_utils.AbsolutePath, ParseError) {
+  case tom.get_string(table, ["target_dir"]) {
+    Ok(path) ->
+      path_utils.join_and_resolve(base_dir, path)
+      |> result.map_error(PathError)
+    Error(tom.NotFound(_)) ->
+      case root_target_dir {
+        Some(root) ->
+          path_utils.join_and_resolve(root, name)
+          |> result.map_error(PathError)
+        None -> Error(MissingTargetDir(name))
+      }
+    Error(error) -> Error(GetError(error))
+  }
+}
+
 fn get_atlas(
   entry: #(String, Toml),
   base_dir: path_utils.AbsolutePath,
+  root_target_dir: Option(path_utils.AbsolutePath),
   root_settings: Settings,
   root_timeout: Int,
 ) -> Result(Atlas, ParseError) {
@@ -347,15 +379,12 @@ fn get_atlas(
     |> result.map_error(PathError),
   )
 
-  use target_dir_path <- result.try(
-    tom.get_string(table, ["target_dir"])
-    |> result.map_error(GetError),
-  )
-
-  use target_dir <- result.try(
-    path_utils.join_and_resolve(base_dir, target_dir_path)
-    |> result.map_error(PathError),
-  )
+  use target_dir <- result.try(get_atlas_target_dir(
+    table,
+    name,
+    base_dir,
+    root_target_dir,
+  ))
 
   use gdx_settings <- result.try(get_gdx_settings(table, root_settings))
 
@@ -377,6 +406,7 @@ fn get_atlas(
 fn get_atlases(
   doc: Dict(String, Toml),
   base_dir: path_utils.AbsolutePath,
+  root_target_dir: Option(path_utils.AbsolutePath),
   root_settings: Settings,
   root_timeout: Int,
 ) -> Result(List(Atlas), ParseError) {
@@ -389,7 +419,13 @@ fn get_atlases(
     items
     |> dict.to_list
     |> list.sort(fn(a, b) { string.compare(a.0, b.0) })
-    |> list.try_map(get_atlas(_, base_dir, root_settings, root_timeout)),
+    |> list.try_map(get_atlas(
+      _,
+      base_dir,
+      root_target_dir,
+      root_settings,
+      root_timeout,
+    )),
   )
 
   Ok(atlases)
@@ -414,6 +450,15 @@ pub fn parse_config(
     |> result.map_error(PathError),
   )
 
+  use target_dir <- result.try(case tom.get_string(doc, ["target_dir"]) {
+    Ok(path) ->
+      path_utils.join_and_resolve(base_dir, path)
+      |> result.map(Some)
+      |> result.map_error(PathError)
+    Error(tom.NotFound(_)) -> Ok(None)
+    Error(error) -> Error(GetError(error))
+  })
+
   use concurrency <- result.try(case tom.get_int(doc, ["concurrency"]) {
     Ok(value) -> Ok(value)
     Error(tom.NotFound(_)) -> Ok(default_max_job_count)
@@ -424,9 +469,23 @@ pub fn parse_config(
 
   use timeout <- result.try(get_timeout(doc, default_timeout))
 
-  use atlases <- result.try(get_atlases(doc, base_dir, gdx_settings, timeout))
+  use atlases <- result.try(get_atlases(
+    doc,
+    base_dir,
+    target_dir,
+    gdx_settings,
+    timeout,
+  ))
 
-  Ok(Config(base_dir:, jar:, concurrency:, atlases:, gdx_settings:, timeout:))
+  Ok(Config(
+    base_dir:,
+    jar:,
+    target_dir:,
+    concurrency:,
+    atlases:,
+    gdx_settings:,
+    timeout:,
+  ))
 }
 
 pub fn load_config(path: String) -> Result(Config, ParseError) {
@@ -443,6 +502,10 @@ pub fn load_config(path: String) -> Result(Config, ParseError) {
 pub fn describe_parse_error(error: ParseError) -> String {
   case error {
     PathError(path) -> "invalid path: " <> path
+    MissingTargetDir(name) ->
+      "atlas `"
+      <> name
+      <> "` has no `target_dir` and the config has no root `target_dir`"
     InvalidNumber(number) ->
       "invalid number: " <> number_utils.tom_number_to_string(number)
     InvalidTimeout(milliseconds) ->
