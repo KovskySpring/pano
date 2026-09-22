@@ -765,3 +765,57 @@ pub fn pool_times_out_slow_item_test() {
   let assert Ok(_) = process.receive(escaped, within: 100)
   let assert Error(Nil) = process.receive(escaped, within: 2500)
 }
+
+/// Every job is announced as it starts and again as it settles, and a job only
+/// starts once a slot frees up. The state handed to the fold comes back out.
+pub fn pool_reports_events_in_order_test() {
+  let #(results, events) =
+    pool.exec_observed(
+      [10, 20, 30],
+      limit: 1,
+      timeout: fn(_) { 5000 },
+      run: fn(nap) {
+        process.sleep(nap)
+        nap
+      },
+      poll: 0,
+      state: [],
+      on: fn(events, event) { [event, ..events] },
+    )
+
+  assert results == [pool.Finished(10), pool.Finished(20), pool.Finished(30)]
+
+  // With one slot, the run is strictly serial: start, settle, start, settle…
+  assert list.reverse(events)
+    == [
+      pool.Started(0),
+      pool.Settled(0, pool.Finished(10)),
+      pool.Started(1),
+      pool.Settled(1, pool.Finished(20)),
+      pool.Started(2),
+      pool.Settled(2, pool.Finished(30)),
+    ]
+}
+
+/// A non-zero `poll` reports `Waiting` while nothing else is happening, which
+/// is what advances the progress animation between real events.
+pub fn pool_reports_waiting_while_idle_test() {
+  let #(_, waits) =
+    pool.exec_observed(
+      [300],
+      limit: 1,
+      timeout: fn(_) { 5000 },
+      run: process.sleep,
+      poll: 20,
+      state: 0,
+      on: fn(waits, event) {
+        case event {
+          pool.Waiting -> waits + 1
+          _ -> waits
+        }
+      },
+    )
+
+  // ~15 polls over 300ms; the bound is loose so a slow machine still passes.
+  assert waits > 3
+}

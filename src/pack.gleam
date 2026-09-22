@@ -13,12 +13,16 @@ import internal/compat/phaser
 import internal/file_utils
 import internal/path_utils
 import internal/pool
+import internal/progress/rows
 import pack_config.{type Settings}
 import simplifile
 import snag
 import temporary
 
 const timeout_grace = 5000
+
+// How often the progress display repaints, in milliseconds.
+const frame_ms = 80
 
 type Job {
   Job(
@@ -39,7 +43,18 @@ fn describe(job: Job) -> String {
   }
 }
 
-fn run_job(job: Job, config: Config) -> snag.Result(Nil) {
+type Summary {
+  Summary(pages: Int, frames: Int)
+}
+
+fn describe_summary(summary: Summary) -> String {
+  int.to_string(summary.pages)
+  <> " page(s), "
+  <> int.to_string(summary.frames)
+  <> " frames"
+}
+
+fn run_job(job: Job, config: Config) -> snag.Result(Summary) {
   let scratch =
     temporary.directory()
     |> temporary.with_prefix("gdxpack-")
@@ -141,7 +156,7 @@ fn pack_in_scratch(
   job: Job,
   config: Config,
   unresolved_scratch: String,
-) -> snag.Result(Nil) {
+) -> snag.Result(Summary) {
   use scratch <- result.try(
     path_utils.resolve(unresolved_scratch)
     |> result.map_error(fn(error) {
@@ -220,30 +235,89 @@ fn pack_in_scratch(
     scale: job.factor,
   ))
 
-  log_pack(job, pages)
-  Ok(Nil)
+  Ok(summarise(pages))
 }
 
-fn log_pack(job: Job, pages: List(Page)) -> Nil {
-  let frames =
-    list.fold(pages, 0, fn(total, page) { total + list.length(page.frames) })
-  let label = case job.label {
-    "" -> ""
-    l -> "[" <> l <> "] "
-  }
-  io.println(
-    "  "
-    <> label
-    <> job.spec.name
-    <> ": "
-    <> int.to_string(list.length(pages))
-    <> " page(s), "
-    <> int.to_string(frames)
-    <> " frames",
+fn summarise(pages: List(Page)) -> Summary {
+  Summary(
+    pages: list.length(pages),
+    frames: list.fold(pages, 0, fn(total, page) {
+      total + list.length(page.frames)
+    }),
   )
 }
 
-pub fn pack(config: Config) -> snag.Result(Nil) {
+type Display {
+  Animated(rows.Rows)
+  Plain(labels: List(String))
+}
+
+fn new_display(jobs: List(Job), progress: Bool) -> Display {
+  let labels = list.map(jobs, describe)
+  case progress {
+    False -> Plain(labels:)
+    True ->
+      list.index_fold(labels, rows.new(), fn(display, label, index) {
+        rows.add(display, int.to_string(index), label)
+      })
+      |> Animated
+  }
+}
+
+fn on_pool_event(
+  display: Display,
+  event: pool.Event(snag.Result(Summary)),
+) -> Display {
+  case display, event {
+    Animated(live), pool.Waiting -> Animated(rows.render(rows.tick(live)))
+
+    Animated(live), pool.Started(index) ->
+      Animated(
+        rows.set_status(live, int.to_string(index), rows.Running)
+        |> rows.render,
+      )
+
+    Animated(live), pool.Settled(index:, outcome:) -> {
+      let id = int.to_string(index)
+      let #(status, note) = case outcome {
+        pool.Finished(Ok(summary)) -> #(rows.Done, describe_summary(summary))
+        pool.Finished(Error(_)) -> #(rows.Failed, "failed")
+        pool.TimedOut -> #(rows.Failed, "timed out")
+      }
+      Animated(
+        live
+        |> rows.set_status(id, status)
+        |> rows.set_note(id, note)
+        |> rows.render,
+      )
+    }
+
+    Plain(labels:), pool.Settled(index:, outcome: pool.Finished(Ok(summary))) -> {
+      io.println(
+        "  " <> label_at(labels, index) <> ": " <> describe_summary(summary),
+      )
+      display
+    }
+
+    Plain(..), _ -> display
+  }
+}
+
+fn label_at(labels: List(String), index: Int) -> String {
+  case list.drop(labels, index) {
+    [label, ..] -> label
+    [] -> "job " <> int.to_string(index)
+  }
+}
+
+fn finish_display(display: Display) -> Nil {
+  case display {
+    Animated(live) -> rows.finish(live)
+    Plain(..) -> Nil
+  }
+}
+
+pub fn pack(config: Config, progress progress: Bool) -> snag.Result(Nil) {
   let jobs =
     list.flat_map(config.atlases, fn(atlas) {
       case atlas.variants {
@@ -285,13 +359,18 @@ pub fn pack(config: Config) -> snag.Result(Nil) {
     <> " at a time…",
   )
 
-  let results =
-    pool.exec(
+  let #(results, display) =
+    pool.exec_observed(
       jobs,
       limit: config.concurrency,
       timeout: fn(job) { job.timeout + timeout_grace },
       run: run_job(_, config),
+      poll: frame_ms,
+      state: new_display(jobs, progress),
+      on: on_pool_event,
     )
+
+  finish_display(display)
 
   let #(_, errors) =
     list.zip(jobs, results)

@@ -1,5 +1,5 @@
 [tools]
-gleam = "1.18.1"
+gleam = "latest"
 erlang = "29.0.5"
 rebar = { version = "3.27.0", asset_pattern = "rebar3" }
 java = "latest"

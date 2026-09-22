@@ -22,11 +22,15 @@ const app_name = "pano"
 
 const flag_config = "config"
 
+const flag_no_progress = "no-progress"
+
 const default_config_filename = "packs.toml"
 
 const message_about = "Multi-threaded texture packer for Phaser 3, using libGDX's TexturePacker under the hood."
 
 const message_help_config = "Path to the packs.toml config (default: packs.toml in the current directory)"
+
+const message_help_no_progress = "Print one line per job as it finishes instead of the live progress display. Applied automatically when stderr is not a terminal."
 
 pub fn main() {
   glint.new()
@@ -66,27 +70,34 @@ fn check_runtime() -> snag.Result(Nil) {
   Nil
 }
 
-fn run_pack(path: String) -> snag.Result(Nil) {
+fn run_pack(path: String, progress: Bool) -> snag.Result(Nil) {
   use _ <- result.try(check_runtime())
   use config <- result.try(load_config(path))
-  pack.pack(config)
+  pack.pack(config, progress:)
 }
 
 fn receive_pack_command() -> glint.Command(Nil) {
   use <- glint.command_help(message_about)
 
-  use parse_flag <- glint.flag(
+  use parse_config <- glint.flag(
     glint.string_flag(flag_config)
     |> glint.flag_default(default_config_filename)
     |> glint.flag_help(message_help_config),
   )
 
+  use parse_no_progress <- glint.flag(
+    glint.bool_flag(flag_no_progress)
+    |> glint.flag_default(False)
+    |> glint.flag_help(message_help_no_progress),
+  )
+
   use _, _, flags <- glint.command()
 
-  let outcome =
-    flags
-    |> parse_flag
-    |> result.try(run_pack)
+  let outcome = {
+    use path <- result.try(parse_config(flags))
+    use no_progress <- result.try(parse_no_progress(flags))
+    run_pack(path, !no_progress && stderr_is_terminal())
+  }
 
   case outcome {
     Ok(_) -> Nil
@@ -101,3 +112,6 @@ fn fail(issue: snag.Snag) -> Nil {
 
 @external(erlang, "pano_ffi", "halt")
 fn halt(status: Int) -> Nil
+
+@external(erlang, "pano_ffi", "stderr_is_terminal")
+fn stderr_is_terminal() -> Bool
